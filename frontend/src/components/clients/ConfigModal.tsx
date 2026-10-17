@@ -6,6 +6,7 @@ import { api } from "@/lib/api";
 import { copyText, useAction } from "@/lib/hooks";
 import { Fmt } from "@/lib/format";
 import { t } from "@/i18n";
+import type { ServerKind } from "@/lib/types";
 import { Modal, Segmented } from "@/components/ui/Primitives";
 import { ErrorState, Skeleton } from "@/components/ui/Feedback";
 
@@ -18,7 +19,7 @@ const rich = (s: string, parts: Record<string, ReactNode>) =>
     return <Fragment key={i}>{m && m[1] in parts ? parts[m[1]] : p}</Fragment>;
   });
 
-export default function ConfigModal({ clientId, onClose }: { clientId: string | null; onClose: () => void }) {
+export default function ConfigModal({ clientId, server, onClose }: { clientId: string | null; server?: ServerKind; onClose: () => void }) {
   const [tab, setTab] = useState<Tab>("qr");
   const [link, setLink] = useState<{ url: string; expires_at: string } | null>(null);
   const q = useQuery({ queryKey: ["bundle", clientId], queryFn: () => api.clients.bundle(clientId!), enabled: !!clientId, staleTime: 0, gcTime: 0,
@@ -64,7 +65,9 @@ export default function ConfigModal({ clientId, onClose }: { clientId: string | 
                   </> : <>
                     <li>{rich(t("Install {a} or {b} (iOS / Android / Windows / macOS)."), { a: wg, b: avpn })}</li>
                     <li>{t("WireGuard: “+” → “Scan QR code”. Amnezia VPN: “+” → “QR code” or “Settings file” (.conf).")}</li>
-                    <li>{t("The connection goes to the home MikroTik: the local network is reachable, sites from the list go through Amnezia.")}</li>
+                    <li>{server === "opnsense"
+                      ? t("The connection goes to OPNsense: the local network is reachable by its firewall rules.")
+                      : t("The connection goes to the home MikroTik: the local network is reachable, sites from the list go through Amnezia.")}</li>
                   </>}
                 </ol>
               </div>

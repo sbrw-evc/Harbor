@@ -50,6 +50,7 @@ to the person who issued it: it never has more rights than their current role an
 | Keystone connection key (optional) | OpenBao `amnezia/spa/connection_key` (`value`) |
 | Local passwords (argon2id) and TOTP secrets | OpenBao `amnezia/local/users/<id>/password`, `…/totp` — never in PostgreSQL |
 | Telegram bot token | OpenBao `amnezia/notify/telegram` |
+| OPNsense API key and secret | OpenBao `amnezia/opnsense/api` |
 | Database and ClickHouse passwords | OpenBao `amnezia/infra/postgres`, `amnezia/infra/clickhouse`; for the bundled services also `.env` (mode 600) |
 
 The backend authenticates to OpenBao with an AppRole whose policy is limited to `amnezia/*` and reading the raft snapshot.

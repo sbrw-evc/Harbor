@@ -245,4 +245,9 @@ export default {
   "The address is not set: fill it in on the settings page": "Адрес не задан: укажите его на странице настроек",
   "The client is created, but its config could not be written: {e}": "Клиент создан, но его конфигурацию не удалось записать: {e}",
   "Setting {key}: expected {what}": "Параметр {key}: ожидается {what}",
+  "WireGuard on OPNsense": "WireGuard на OPNsense",
+  "reached over the REST API; empty — no OPNsense server; the API key is entered on the “VPN on OPNsense” page": "доступ через REST API; пусто — сервера OPNsense нет; API-ключ вводится на странице «VPN на OPNsense»",
+  "the name of the instance or its device, e.g. wg0": "имя инстанса или его устройство, например wg0",
+  "Check the TLS certificate": "Проверять сертификат TLS",
+  "off for the self-signed certificate of OPNsense": "выключите для самоподписанного сертификата OPNsense",
 };

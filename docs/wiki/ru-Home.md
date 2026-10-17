@@ -17,6 +17,7 @@ UniFi, Keenetic, OpenWrt, OPNsense, pfSense, Cisco, HP / Aruba, Dell, Zyxel, Jun
 | [[Конфигурация|ru-Configuration]] | Мастер настройки, параметры, режимы входа |
 | [[Клиенты VPN|ru-Clients]] | Жизненный цикл клиентов VPN, квоты, сроки, выдача конфигов |
 | [[VPN на MikroTik|ru-MikroTik-VPN]] | WireGuard-сервер на MikroTik: настройка, клиенты, конфиги |
+| [[VPN на OPNsense|ru-OPNsense-VPN]] | Инстанс WireGuard на OPNsense: API-ключ, клиенты, конфиги |
 | [[Мониторинг и алерты|ru-Monitoring]] | Дашборд, аналитика, карта, алерты, Telegram |
 | [[Сетевые устройства|ru-Devices]] | Платформы, добавление устройств, опрос, настройка из панели, клиенты сети |
 | [[Карта сети|ru-Network-Map]] | Живая карта сети |

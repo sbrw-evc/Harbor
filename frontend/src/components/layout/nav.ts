@@ -1,5 +1,5 @@
 import {
-  Activity, Archive, BarChart3, Bell, FileClock, Globe2, HardDrive, LayoutDashboard, MonitorSmartphone, Network, Router,
+  Activity, Archive, BarChart3, Bell, BrickWall, FileClock, Globe2, HardDrive, LayoutDashboard, MonitorSmartphone, Network, Router,
   Server, Settings, Share2, Shield, UserCircle, UserCog, Users, Waypoints, type LucideIcon,
 } from "lucide-react";
 import type { Role } from "@/lib/types";
@@ -32,6 +32,7 @@ export const NAV: NavGroup[] = [
     id: "vpn", title: "VPN", icon: Shield, pages: [
       { to: "/clients", label: "VPN clients", icon: Users },
       { to: "/mikrotik-vpn", label: "VPN on MikroTik", icon: Router },
+      { to: "/opnsense-vpn", label: "VPN on OPNsense", icon: BrickWall },
       { to: "/routing", label: "Routing", icon: Network },
     ],
   },

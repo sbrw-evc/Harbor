@@ -7,7 +7,7 @@ import { Fmt, REASON_LABEL, STATUS_LABEL } from "@/lib/format";
 import { k, t } from "@/i18n";
 import Flag from "@/components/ui/Flag";
 import { useAction } from "@/lib/hooks";
-import type { Range } from "@/lib/types";
+import { SERVER_LABEL, type Range } from "@/lib/types";
 import { useAuth } from "@/store/auth";
 import { Badge, Card, Kpi, Modal, Page, PageHeader, Segmented, StatusDot, UsageBar } from "@/components/ui/Primitives";
 import { ErrorState, PageLoader, Skeleton } from "@/components/ui/Feedback";
@@ -58,7 +58,7 @@ export default function ClientDetail() {
           <Badge tone={c.status === "active" ? "green" : c.status === "blocked" ? "red" : "amber"}>
             {t(STATUS_LABEL[c.status])}{c.block_reason && ` · ${t(REASON_LABEL[c.block_reason])}`}
           </Badge>
-          <Badge tone="blue">{c.server === "mikrotik" ? "MikroTik · WireGuard" : "Amnezia · AWG"}</Badge>
+          <Badge tone="blue">{c.server === "amnezia" ? "Amnezia · AWG" : `${SERVER_LABEL[c.server]} · WireGuard`}</Badge>
           {c.system && <Badge tone="violet">{t("system gateway")}</Badge>}
           {!c.managed && <Badge tone="amber">{t("key not in the panel")}</Badge>}
           <span className="mono">{c.address}</span>
@@ -128,7 +128,7 @@ export default function ClientDetail() {
       <Modal open={editing} onClose={() => setEditing(false)} title={t("Editing · {name}", { name: c.name })} wide>
         <ClientForm initial={c} submitLabel={t("Save")} busy={update.isPending} onSubmit={(d) => update.mutate(d)} />
       </Modal>
-      <ConfigModal clientId={showConfig ? c.id : null} onClose={() => setShowConfig(false)} />
+      <ConfigModal clientId={showConfig ? c.id : null} server={c.server} onClose={() => setShowConfig(false)} />
     </Page>
   );
 }

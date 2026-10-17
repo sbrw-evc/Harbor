@@ -58,6 +58,7 @@ export default {
   "VPN clients": "Клиенты VPN",
   "VPN connections map": "Карта подключений VPN",
   "VPN on MikroTik": "VPN на MikroTik",
+  "VPN on OPNsense": "VPN на OPNsense",
   "Viewer": "Наблюдатель",
   "expired": "истёк",
   "just now": "только что",
