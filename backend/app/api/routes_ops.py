@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, File, Request, UploadFile
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
+from ..adapters.opnsense_wg import SECRET_PATH as OPN_SECRET
 from ..container import Container
 from ..domain.errors import DomainError
 from ..domain.models import Role
@@ -119,6 +120,34 @@ async def mikrotik_vpn_setup(p: Principal = Depends(admin), c: Container = Depen
         c.audit.record(s, p.actor, "mikrotik_vpn.setup", "router", c.mikrotik.wg.iface, "WireGuard",
                        network=str(c.mikrotik.wg.network), port=c.mikrotik.wg.port)
     return await c.mikrotik.info()
+
+
+@router.get("/opnsense-vpn")
+async def opnsense_vpn(_: Principal = Depends(viewer), c: Container = Depends(container)):
+    return await c.opnsense.info()
+
+
+class OpnsenseKeyIn(BaseModel):
+    key: str = Field(min_length=1, max_length=256)
+    secret: str = Field(min_length=1, max_length=256)
+
+
+@router.put("/opnsense-vpn/credentials")
+async def opnsense_vpn_credentials(body: OpnsenseKeyIn, p: Principal = Depends(admin),
+                                   c: Container = Depends(container)):
+    """The API key of OPNsense goes to OpenBao only (opnsense/api), after a check against the API."""
+    await c.opnsense.set_credentials(body.key, body.secret)
+    async with c.db.session() as s:
+        c.audit.record(s, p.actor, "opnsense_vpn.credentials", "settings", "", "OPNsense API key")
+    return await c.opnsense.info()
+
+
+@router.delete("/opnsense-vpn/credentials")
+async def opnsense_vpn_credentials_delete(p: Principal = Depends(admin), c: Container = Depends(container)):
+    await c.secrets.delete(OPN_SECRET)
+    async with c.db.session() as s:
+        c.audit.record(s, p.actor, "opnsense_vpn.credentials_removed", "settings", "", "OPNsense API key")
+    return await c.opnsense.info()
 
 
 @router.get("/routing/status")
