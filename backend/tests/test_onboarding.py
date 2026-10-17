@@ -29,10 +29,12 @@ def test_public_address():
 def test_roles_decide_who_can_fix():
     viewer = _result(_checklist(Facts()), Role.VIEWER)
     assert viewer["done"] is False
-    assert [s["id"] for s in viewer["steps"]] == ["spa", "address", "device", "flows", "vpn_client", "telegram", "backups"]
+    assert [s["id"] for s in viewer["steps"]] == ["spa", "router", "vps", "gateway", "address", "device", "flows",
+                                                 "vpn_client", "telegram", "backups"]
     assert not any(s["can_fix"] for s in viewer["steps"])
     operator = {s["id"]: s["can_fix"] for s in _result(_checklist(Facts()), Role.OPERATOR)["steps"]}
-    assert operator == {"spa": False, "address": False, "device": False, "flows": True, "vpn_client": True,
+    assert operator == {"spa": False, "router": False, "vps": False, "gateway": False, "address": False,
+                        "device": False, "flows": True, "vpn_client": True,
                         "telegram": False, "backups": False}
     assert all(s["can_fix"] for s in _result(_checklist(Facts()), Role.ADMIN)["steps"])
     # Optional steps do not hold a guide back.
@@ -111,6 +113,7 @@ def test_checklist_follows_real_data(env):
 
     async def scenario():
         e = await env()
+        await e.settings.update({"auth_mode": "keystone"}, internal=True)
         empty = await state(e.svc)
         assert not any(empty.values())
         # The router seeded from ROUTER_HOST is not a device yet: it has to answer a poll.
@@ -154,10 +157,47 @@ def test_checklist_follows_real_data(env):
         e.flows.fail = False
 
         st = await state(e.svc)
-        assert not st["address"] and not st["_done"]
+        assert not st["address"] and not st["router"] and not st["_done"]
+        await e.settings.update({"router_host": "192.168.0.1"})
         e.svc._public_urls = ["https://nc.example.com", "http://localhost:8080"]
         st = await state(e.svc)
         assert st["address"] and st["_done"] is True
+
+    asyncio.run(scenario())
+
+
+@needs_db
+def test_local_mode_and_infrastructure_steps(env):
+    from app.db.models import Alert, NetworkDevice, PanelUser
+    from app.db.repositories import UserRepo
+    from app.domain.models import Severity
+
+    async def scenario():
+        e = await env()
+        await e.settings.update({"auth_mode": "local"}, internal=True)
+        st = await state(e.svc)
+        assert not st["spa"] and not st["router"] and not st["vps"] and not st["gateway"]
+        # Standalone: a local administrator is the sign-in step; Keystone is not needed.
+        async with e.db.session() as s:
+            UserRepo(s).add(PanelUser(username="root", role=Role.ADMIN, source="local", is_active=True))
+        assert (await state(e.svc))["spa"]
+        # The router: set in the settings and answering polls.
+        await e.settings.update({"router_host": "192.168.0.1"})
+        assert not (await state(e.svc))["router"]
+        async with e.db.session() as s:
+            s.add(NetworkDevice(name="MikroTik", platform="mikrotik", host="192.168.0.1", role="router", last_ok_at=NOW))
+        assert (await state(e.svc))["router"]
+        # The VPS: set, and not unreachable.
+        await e.settings.update({"awg_host": "203.0.113.10"})
+        assert (await state(e.svc))["vps"]
+        async with e.db.session() as s:
+            s.add(Alert(key="server.unreachable", severity=Severity.CRITICAL, title="down"))
+        assert not (await state(e.svc))["vps"]
+        # The gateway: its address and its own AmneziaWG client config written.
+        await e.settings.update({"gateway_ip": "192.168.0.102"})
+        assert not (await state(e.svc))["gateway"]
+        e.svc._gateway_client = lambda: True
+        assert (await state(e.svc))["gateway"]
 
     asyncio.run(scenario())
 
@@ -233,7 +273,7 @@ def test_routes(env):
         app.dependency_overrides[deps.current] = lambda: deps.Principal(Actor("op", role["r"].value), role["r"])
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://nc.test") as h:
             r = (await h.get("/api/onboarding")).json()
-            assert r["done"] is False and len(r["steps"]) == 7
+            assert r["done"] is False and len(r["steps"]) == 10
             step = {s["id"]: s for s in r["steps"]}
             assert step["spa"] == {"id": "spa", "done": False, "optional": False, "path": "/settings#spa", "action": "",
                                    "can_fix": False}

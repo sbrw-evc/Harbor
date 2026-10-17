@@ -3,10 +3,12 @@ from urllib.parse import urlencode
 
 from fastapi import APIRouter, Depends, Request, Response
 from fastapi.responses import RedirectResponse
+from pydantic import BaseModel, Field
 
 from ..container import Container
-from ..domain.errors import DomainError
+from ..domain.errors import DomainError, Unauthorized
 from ..services.identity import spa
+from ..services.identity.spa import MODE_LOCAL
 from ..services.users import user_dto
 from .deps import COOKIE, Principal, client_ip, container, session_user
 
@@ -18,7 +20,7 @@ def _base(request: Request) -> str:
 
 
 def _secure(request: Request, c: Container) -> bool:
-    return c.cfg.cookie_secure or request.url.scheme == "https"
+    return bool(c.rc.cookie_secure) or request.url.scheme == "https"
 
 
 def _to_login(code: str, description: str = "") -> RedirectResponse:
@@ -70,7 +72,7 @@ async def spa_callback(request: Request, c: Container = Depends(container), code
     resp = RedirectResponse(back, status_code=302)
     resp.delete_cookie(spa.COOKIE, path=spa.COOKIE_PATH)
     resp.set_cookie(COOKIE, token, httponly=True, samesite="strict", secure=_secure(request, c),
-                    max_age=c.cfg.session_ttl_hours * 3600, path="/")
+                    max_age=int(c.rc.session_ttl_hours) * 3600, path="/")
     return resp
 
 
@@ -81,12 +83,80 @@ async def logout(request: Request, response: Response, c: Container = Depends(co
     if token:
         await c.auth.logout(token, client_ip(request))
     response.delete_cookie(COOKIE, path="/")
-    return {"ok": True, "redirect": await c.spa.sign_out_url(_base(request))}
+    redirect = await c.spa.sign_out_url(_base(request)) if await c.spa.active() else None
+    return {"ok": True, "redirect": redirect}
 
 
 @router.get("/me")
 async def me(p: Principal = Depends(session_user)):
     return user_dto(p.user)
+
+
+# The local sign-in (auth_mode "local") ------------------------------------------------------------------------------
+
+class LoginIn(BaseModel):
+    username: str = Field(max_length=64)
+    password: str = Field(max_length=256)
+
+
+class CodeIn(BaseModel):
+    code: str = Field(min_length=6, max_length=8)
+
+
+class PasswordChangeIn(BaseModel):
+    current: str = Field(max_length=256)
+    new: str = Field(max_length=256)
+
+
+async def _local_only(c: Container) -> None:
+    if await c.settings.get("auth_mode") != MODE_LOCAL:
+        raise DomainError("Sign-in is through Keystone")
+
+
+@router.post("/login")
+async def login(body: LoginIn, request: Request, response: Response, c: Container = Depends(container)):
+    await _local_only(c)
+    res = await c.auth.login(body.username, body.password, client_ip(request), request.headers.get("user-agent", ""))
+    response.set_cookie(COOKIE, res.token, httponly=True, samesite="strict", secure=_secure(request, c),
+                        max_age=int(c.rc.session_ttl_hours) * 3600, path="/")
+    return {"requires_2fa": res.requires_2fa, "user": None if res.requires_2fa else user_dto(res.user)}
+
+
+@router.post("/2fa")
+async def second_factor(body: CodeIn, request: Request, c: Container = Depends(container)):
+    await _local_only(c)
+    token = request.cookies.get(COOKIE)
+    if not token:
+        raise Unauthorized("The sign-in took too long, sign in again")
+    return {"user": user_dto(await c.auth.verify_2fa(token, body.code, client_ip(request)))}
+
+
+@router.post("/password")
+async def change_password(body: PasswordChangeIn, p: Principal = Depends(session_user),
+                          c: Container = Depends(container)):
+    await _local_only(c)
+    await c.auth.change_password(p.user.id, body.current, body.new, p.token)
+    return {"ok": True}
+
+
+@router.post("/totp/setup")
+async def totp_setup(p: Principal = Depends(session_user), c: Container = Depends(container)):
+    await _local_only(c)
+    return await c.auth.totp_begin(p.user)
+
+
+@router.post("/totp/enable")
+async def totp_enable(body: CodeIn, p: Principal = Depends(session_user), c: Container = Depends(container)):
+    await _local_only(c)
+    await c.auth.totp_enable(p.user.id, body.code)
+    return {"ok": True}
+
+
+@router.post("/totp/disable")
+async def totp_disable(p: Principal = Depends(session_user), c: Container = Depends(container)):
+    await _local_only(c)
+    await c.auth.totp_disable(p.user.id, p.actor)
+    return {"ok": True}
 
 
 @router.get("/sessions")

@@ -17,7 +17,7 @@ from ..domain.net import HOST_RE
 from ..ports import RouterGateway
 from .alerts import AlertService
 from .audit import AuditService
-from .common import Actor, utcnow
+from .common import Actor, current, utcnow
 
 DOH_RESOLVERS = ("https://cloudflare-dns.com/dns-query", "https://dns.google/resolve")
 CUSTOM_KEY = "_custom_prefixes"
@@ -28,8 +28,16 @@ EXCLUDE = [ipaddress.ip_network(x) for x in (
 
 
 class SiteListCompiler:
-    def __init__(self, vpn_server_ip: str):
-        self._exclude = EXCLUDE + [ipaddress.ip_network(f"{vpn_server_ip}/32")]
+    def __init__(self, vpn_server_ip):
+        self._vpn_server_ip = vpn_server_ip
+
+    @property
+    def _exclude(self) -> list:
+        ip = current(self._vpn_server_ip)
+        try:
+            return EXCLUDE + [ipaddress.ip_network(f"{ip}/32")]
+        except ValueError:  # not set yet, or a host name
+            return list(EXCLUDE)
 
     def compile(self, raw: bytes) -> tuple[list[str], dict, list[tuple[str, str, str]]]:
         try:

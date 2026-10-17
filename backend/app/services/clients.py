@@ -15,7 +15,7 @@ from ..domain.errors import DomainError, ExternalServiceError, NotFound
 from ..domain.models import BlockReason, ClientBundle, ClientStatus
 from ..ports import SecretStore, VpnBackend
 from .audit import AuditService
-from .common import Actor, EventBus, utcnow
+from .common import Actor, EventBus, current, utcnow
 from .server import generate_keypair
 from .settings import SettingsService
 
@@ -58,7 +58,7 @@ class ClientView:
 
 class VpnClientService:
     def __init__(self, db: Database, backends: list[VpnBackend], secrets_store: SecretStore,
-                 settings: SettingsService, audit: AuditService, bus: EventBus, public_base_url: str, live):
+                 settings: SettingsService, audit: AuditService, bus: EventBus, public_base_url, live):
         self._live = live
         self._db = db
         self.backends = {b.kind: b for b in backends}
@@ -66,7 +66,7 @@ class VpnClientService:
         self._settings = settings
         self._audit = audit
         self._bus = bus
-        self._public_base = public_base_url.rstrip("/")
+        self._public_base = public_base_url
 
     @staticmethod
     def _secret_path(client_id: uuid.UUID) -> str:
@@ -245,7 +245,7 @@ class VpnClientService:
             ShareRepo(s).add(ShareLink(token_hash=hashlib.sha256(token.encode()).hexdigest(), client_id=c.id,
                                        created_by=actor.username, expires_at=expires, uses_left=3))
             self._audit.record(s, actor, "client.share_link_created", "client", c.id, c.name, hours=hours)
-        return {"url": f"{self._public_base}/s/{token}", "expires_at": expires.isoformat()}
+        return {"url": f"{(current(self._public_base) or '').rstrip('/')}/s/{token}", "expires_at": expires.isoformat()}
 
     async def consume_share_link(self, token: str, ip: str) -> ClientBundle:
         async with self._db.session() as s:
@@ -274,7 +274,7 @@ class VpnClientService:
         return total
 
     async def _sync_backend(self, backend: VpnBackend, actor: Actor | None) -> dict:
-        if not await backend.ready():
+        if not await backend.configured() or not await backend.ready():
             return {"imported": 0, "missing": 0, "peers": 0}
         peers = {p.public_key: p for p in await backend.peers() if p.public_key}
         names = await backend.names()

@@ -49,7 +49,7 @@ class Secrets:
 
 class MemSettings:
     def __init__(self):
-        self.d = {}
+        self.d = {"auth_mode": "keystone"}
 
     async def get(self, key):
         return self.d.get(key)
@@ -213,10 +213,11 @@ def env():
         await db.create_schema()
         fake = FakeSpa()
         settings = SettingsService(db)
+        await settings.update({"auth_mode": "keystone"}, internal=True)
         audit = AuditService(db, EventBus())
         auth = AuthService(db, audit, 12)
         svc = SpaService(db, Secrets(), settings, auth, audit, key=connection_key(), transport=fake.transport())
-        c = SimpleNamespace(cfg=SimpleNamespace(cookie_secure=False, session_ttl_hours=12), db=db, spa=svc, auth=auth,
+        c = SimpleNamespace(rc=SimpleNamespace(cookie_secure=False, session_ttl_hours=12), db=db, spa=svc, auth=auth,
                             audit=audit, settings=settings, tokens=ApiTokenService(db, audit), users=PanelUserService(db))
         app = FastAPI()
         app.add_exception_handler(DomainError, main.domain_error)

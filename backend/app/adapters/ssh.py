@@ -1,6 +1,8 @@
 import asyncio
 import os
 
+import asyncssh
+
 from ..domain.errors import ExternalServiceError
 from ..ports import CommandRunner, SecretStore
 
@@ -12,6 +14,21 @@ class SshKeyProvider:
         self._secrets = secrets
         self._path = path
         self._ready = False
+
+    async def ensure(self) -> str:
+        """The public key of the panel (OpenSSH format); the key pair is created and kept in OpenBao when missing."""
+        data = await self._secrets.get(KEY_SECRET)
+        if not data or "private_key" not in data:
+            key = asyncssh.generate_private_key("ssh-ed25519", comment="network-control")
+            data = {"private_key": key.export_private_key().decode(),
+                    "public_key": key.export_public_key().decode().strip()}
+            await self._secrets.put(KEY_SECRET, data)
+            self._ready = False
+        if not data.get("public_key"):
+            key = asyncssh.import_private_key(data["private_key"])
+            data["public_key"] = key.export_public_key().decode().strip()
+            await self._secrets.put(KEY_SECRET, data)
+        return data["public_key"]
 
     async def path(self) -> str:
         if not self._ready:
@@ -36,6 +53,8 @@ class SshRunner(CommandRunner):
         self._host = host
 
     async def run(self, command: str, stdin: str | None = None, timeout: float = 30) -> str:
+        if not self._host:
+            raise ExternalServiceError("The address is not set: fill it in on the settings page")
         key = await self._keys.path()
         args = ["ssh", "-i", key, "-o", "BatchMode=yes", "-o", "StrictHostKeyChecking=accept-new",
                 "-o", f"UserKnownHostsFile={self._known_hosts}", "-o", "ConnectTimeout=10",

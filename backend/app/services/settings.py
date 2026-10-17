@@ -1,4 +1,7 @@
+import ipaddress
+import re
 import time
+from urllib.parse import urlsplit
 
 from ..db.base import Database
 from ..db.repositories import SettingRepo
@@ -33,6 +36,36 @@ DEFAULTS = {
     "threat_exclude": "",
     "rdns_enabled": True,
     "threat_status": None,
+    # The infrastructure the panel manages, set in the setup wizard and on the settings page (was .env before).
+    # The Amnezia server (VPS) reached over SSH, with its AmneziaWG container.
+    "awg_host": "",
+    "awg_ssh_user": "root",
+    "awg_container": "amnezia-awg2",
+    "awg_iface": "awg0",
+    "awg_bin": "awg",
+    "awg_dir": "/opt/amnezia/awg",
+    # The home router (MikroTik, RouterOS 7) reached over SSH.
+    "router_host": "",
+    "router_ssh_user": "admin",
+    # The gateway: the host of the panel with the awg-client container, its LAN and the tunnel behind it.
+    "gateway_ip": "",
+    "lan_cidr": "192.168.0.0/24",
+    "lan_if": "eth0",
+    "tunnel_net": "10.8.1.0/24",
+    "port_forwards": "",
+    # WireGuard on MikroTik.
+    "mt_wg_iface": "wg-nc",
+    "mt_wg_network": "10.9.0.0/24",
+    "mt_wg_port": 51820,
+    # The panel itself.
+    "public_base_url": "",
+    "spa_public_url": "",
+    "session_ttl_hours": 12,
+    "cookie_secure": False,
+    "flows_ttl_days": 30,
+    # How people sign in: "local" (users of the panel, passwords and TOTP in OpenBao) or "keystone" (Keystone / SPA).
+    # Empty until the setup wizard chooses.
+    "auth_mode": "",
     # The state of the SPA connection (services/identity/spa.py): last synchronisation, its ETag, counts, errors and
     # the configuration SPA gave (application name, account and sign-out addresses).
     "spa": None,
@@ -40,7 +73,117 @@ DEFAULTS = {
 
 
 # Kept by their services; not listed or changed through the general settings API.
-PRIVATE = frozenset({"spa"})
+PRIVATE = frozenset({"spa", "auth_mode"})
+
+# The settings of the infrastructure: a change rebuilds the adapters (app/runtime.py).
+INFRA = frozenset({"awg_host", "awg_ssh_user", "awg_container", "awg_iface", "awg_bin", "awg_dir", "router_host",
+                   "router_ssh_user", "gateway_ip", "lan_cidr", "lan_if", "tunnel_net", "port_forwards", "mt_wg_iface",
+                   "mt_wg_network", "mt_wg_port", "public_base_url", "spa_public_url", "session_ttl_hours",
+                   "cookie_secure", "flows_ttl_days"})
+
+_HOST = re.compile(r"^(?=.{1,253}$)([A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?)(\.[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*$")
+_NAME = re.compile(r"^[A-Za-z0-9_.-]{1,64}$")
+_PATH = re.compile(r"^/[A-Za-z0-9_./-]{0,255}$")
+_FORWARD = re.compile(r"^(\d{1,5})=([0-9.]+):(\d{1,5})$")
+
+
+def _host(v, empty: bool = True) -> str:
+    v = str(v or "").strip()
+    if not v and empty:
+        return ""
+    try:
+        return str(ipaddress.ip_address(v))
+    except ValueError:
+        if _HOST.match(v):
+            return v.lower()
+    raise ValueError("an IP address or a host name")
+
+
+def _ip(v, empty: bool = True) -> str:
+    v = str(v or "").strip()
+    if not v and empty:
+        return ""
+    try:
+        return str(ipaddress.ip_address(v))
+    except ValueError as e:
+        raise ValueError("an IP address") from e
+
+
+def _cidr(v) -> str:
+    try:
+        return str(ipaddress.ip_network(str(v).strip(), strict=False))
+    except ValueError as e:
+        raise ValueError("a network such as 192.168.0.0/24") from e
+
+
+def _name(v) -> str:
+    v = str(v or "").strip()
+    if not _NAME.match(v):
+        raise ValueError("letters, digits, '-', '_' or '.'")
+    return v
+
+
+def _path(v) -> str:
+    v = str(v or "").strip().rstrip("/") or "/"
+    if not _PATH.match(v):
+        raise ValueError("an absolute path")
+    return v
+
+
+def _url(v) -> str:
+    v = str(v or "").strip().rstrip("/")
+    if not v:
+        return ""
+    u = urlsplit(v)
+    if u.scheme not in ("http", "https") or not u.hostname or u.query or u.fragment:
+        raise ValueError("an http(s) address such as https://nc.example.com")
+    return v
+
+
+def _int(lo: int, hi: int):
+    def check(v) -> int:
+        try:
+            n = int(v)
+        except (TypeError, ValueError) as e:
+            raise ValueError(f"a number from {lo} to {hi}") from e
+        if not lo <= n <= hi:
+            raise ValueError(f"a number from {lo} to {hi}")
+        return n
+    return check
+
+
+def _forwards(v) -> str:
+    out = []
+    for item in str(v or "").replace(",", " ").split():
+        m = _FORWARD.match(item)
+        if not m or not 0 < int(m[1]) < 65536 or not 0 < int(m[3]) < 65536:
+            raise ValueError("pairs like 8443=192.168.0.10:443 separated by spaces")
+        _ip(m[2], empty=False)
+        out.append(item)
+    return " ".join(out)
+
+
+VALIDATORS = {
+    "awg_host": _host, "awg_ssh_user": _name, "awg_container": _name, "awg_iface": _name, "awg_bin": _name,
+    "awg_dir": _path, "router_host": _host, "router_ssh_user": _name, "gateway_ip": _ip, "lan_cidr": _cidr,
+    "lan_if": _name, "tunnel_net": _cidr, "port_forwards": _forwards, "mt_wg_iface": _name, "mt_wg_network": _cidr,
+    "mt_wg_port": _int(1, 65535), "public_base_url": _url, "spa_public_url": _url, "session_ttl_hours": _int(1, 720),
+    "cookie_secure": bool, "flows_ttl_days": _int(1, 3650),
+}
+
+
+def validate(values: dict) -> dict:
+    """Checks and normalises the settings with a validator; the message names the setting."""
+    out = dict(values)
+    for k, v in values.items():
+        check = VALIDATORS.get(k)
+        if check is None:
+            continue
+        try:
+            out[k] = check(v)
+        except ValueError as e:
+            raise ValueError(f"Setting {k}: expected {e}") from e
+    return out
 
 
 class SettingsService:
@@ -49,6 +192,7 @@ class SettingsService:
     def __init__(self, db: Database):
         self._db = db
         self._cache: dict | None = None
+        self._stored: frozenset[str] = frozenset()
         self._loaded = 0.0
 
     async def _load(self) -> dict:
@@ -56,6 +200,7 @@ class SettingsService:
             self._loaded = time.monotonic()
             async with self._db.session() as s:
                 stored = await SettingRepo(s).get_all()
+            self._stored = frozenset(k for k in stored if k in DEFAULTS)
             self._cache = {**DEFAULTS, **{k: v for k, v in stored.items() if k in DEFAULTS}}
         return self._cache
 
@@ -65,6 +210,14 @@ class SettingsService:
     async def get(self, key: str):
         return (await self._load())[key]
 
+    async def stored(self) -> frozenset[str]:
+        """The keys saved in the database (the rest are defaults)."""
+        await self._load()
+        return self._stored
+
+    def invalidate(self) -> None:
+        self._cache = None
+
     async def put_private(self, key: str, value) -> None:
         """Stores one of the private settings (kept by its service)."""
         if key not in PRIVATE:
@@ -73,10 +226,14 @@ class SettingsService:
             await SettingRepo(s).put(key, value)
         self._cache = None
 
-    async def update(self, values: dict) -> dict:
-        unknown = set(values) - (set(DEFAULTS) - PRIVATE)
+    async def update(self, values: dict, *, internal: bool = False) -> dict:
+        """Saves settings after validation. ``internal`` (the setup wizard, the import of old .env values) may also
+        write the private ones."""
+        allowed = set(DEFAULTS) if internal else set(DEFAULTS) - PRIVATE
+        unknown = set(values) - allowed
         if unknown:
             raise ValueError(f"Unknown settings: {', '.join(sorted(unknown))}")
+        values = validate(values)
         async with self._db.session() as s:
             repo = SettingRepo(s)
             for k, v in values.items():

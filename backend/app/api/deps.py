@@ -12,8 +12,18 @@ COOKIE = "nc_session"
 CSRF_HEADER = "network-control"
 
 
+class SetupRequired(Unauthorized):
+    status = 503
+
+    def __init__(self):
+        super().__init__("Network Control is not set up yet: open the panel and finish the setup wizard")
+
+
 def container(request: Request) -> Container:
-    return request.app.state.container
+    c = getattr(request.app.state, "container", None)
+    if c is None:
+        raise SetupRequired()
+    return c
 
 
 def client_ip(request: Request) -> str:
@@ -60,5 +70,5 @@ viewer = require(Role.VIEWER)
 operator = require(Role.OPERATOR)
 admin = require(Role.ADMIN)
 
-__all__ = ["COOKIE", "Principal", "admin", "client_ip", "container", "current", "operator", "session_user", "viewer",
-           "Unauthorized"]
+__all__ = ["COOKIE", "Principal", "SetupRequired", "admin", "client_ip", "container", "current", "operator",
+           "session_user", "viewer", "Unauthorized"]

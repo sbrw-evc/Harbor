@@ -37,6 +37,8 @@ class FakeSpa:
         self.published: list[dict] = []
         self.requests: list[tuple[str, str, dict]] = []
         self.tamper: dict = {}  # claims to override in the next ID tokens (aud, iss, nonce, …)
+        self.import_open = False  # an administrator of SPA allowed moving users for the application
+        self.imported: list[dict] = []
         self.app = self._build()
 
     def transport(self) -> httpx.ASGITransport:
@@ -119,7 +121,43 @@ class FakeSpa:
             return {"application": {"id": CLIENT_ID, "name": "Network Control", "type": "network-control"},
                     "roles": spa.published[-1]["roles"] if spa.published else [],
                     "methods": [{"id": "passkey", "title": "Passkey"}],
-                    "sign_out_url": f"{ISSUER}/oauth2/logout", "account_url": f"{ISSUER}/profile"}
+                    "sign_out_url": f"{ISSUER}/oauth2/logout", "account_url": f"{ISSUER}/profile",
+                    "user_import": spa.import_open}
+
+        @app.post("/api/spa/v1/users/import")
+        async def import_users(request: Request):
+            """docs/protocol.md of Keystone: the import window, conflicts by user name or e-mail, known hash formats,
+            roles from the published catalogue; the window closes after a successful import."""
+            if not bearer_ok(request):
+                return JSONResponse({"error": "unauthorized"}, status_code=401)
+            if not spa.import_open:
+                return JSONResponse({"error": "import_not_allowed"}, status_code=403)
+            body = await request.json()
+            roles = {r["id"] for r in (spa.published[-1]["roles"] if spa.published else [])}
+            out = {"imported": [], "conflicts": [], "rejected": []}
+            for u in body.get("users") or []:
+                name, h = u.get("username") or "", u.get("password_hash")
+                taken = {x["username"].lower() for x in spa.users.values()}
+                mails = {x["email"].lower() for x in spa.users.values()}
+                if not name:
+                    out["rejected"].append({"username": name, "reason": "invalid_username"})
+                elif name.lower() in taken:
+                    out["conflicts"].append({"username": name, "reason": "username_taken"})
+                elif u.get("email") and u["email"].lower() in mails:
+                    out["conflicts"].append({"username": name, "reason": "email_taken"})
+                elif u.get("role") not in roles:
+                    out["rejected"].append({"username": name, "reason": "invalid_role"})
+                elif h is not None and not (h.startswith("$argon2id$") or h.startswith("pbkdf2-sha256$")):
+                    out["rejected"].append({"username": name, "reason": "invalid_hash"})
+                else:
+                    uid = f"usr_imp{len(spa.users) + 1}"
+                    spa.add_user(uid, name, [u["role"]], email=u.get("email") or f"{name}@example.com",
+                                 name=u.get("name") or name)
+                    spa.imported.append({**u, "id": uid})
+                    out["imported"].append({"username": name, "id": uid})
+            if out["imported"]:
+                spa.import_open = False
+            return out
 
         @app.get("/api/spa/v1/users")
         async def users(request: Request):

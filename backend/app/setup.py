@@ -1,0 +1,95 @@
+"""The life of the process before and after the setup wizard: it runs in setup mode until bootstrap.json exists, then
+builds the container and starts it. Every process watches for the file, so the one that did not serve the storage step
+follows within seconds."""
+from __future__ import annotations
+
+import asyncio
+import logging
+
+from .bootstrap import Bootstrap, SetupGate
+from .config import Settings
+from .container import Container
+from .db.repositories import UserRepo
+from .services.identity.spa import MODE_KEYSTONE, MODE_LOCAL
+
+log = logging.getLogger(__name__)
+
+WATCH_SECONDS = 3
+STAGE_STORAGE = "storage"
+STAGE_ACCOUNT = "account"
+STAGE_DONE = "done"
+
+
+class SetupState:
+    def __init__(self, cfg: Settings, app_state):
+        self.cfg = cfg
+        self._app = app_state
+        self.boot = Bootstrap(cfg.data_dir, cfg.bao_approle_dir)
+        self.gate = SetupGate(cfg.data_dir)
+        self._lock = asyncio.Lock()
+        self._task: asyncio.Task | None = None
+        self.error: str | None = None
+
+    @property
+    def container(self) -> Container | None:
+        return getattr(self._app, "container", None)
+
+    async def activate(self) -> bool:
+        """Builds and starts the container when bootstrap.json is there. Returns whether it runs."""
+        async with self._lock:
+            if self.container is not None:
+                return True
+            if not self.boot.exists():
+                try:
+                    await self.boot.import_legacy()
+                except Exception as e:
+                    log.warning("old storage settings are not taken over yet: %s", e)
+            if not self.boot.exists():
+                return False
+            try:
+                storage = await self.boot.resolve()
+                c = Container(self.cfg, storage)
+                await c.start()
+            except Exception as e:  # OpenBao or PostgreSQL not up yet: the watcher tries again
+                self.error = str(e) or type(e).__name__
+                log.warning("storage is not reachable yet: %s", self.error)
+                return False
+            self.error = None
+            self._app.container = c
+            log.info("Network Control started")
+            if await self.stage() != STAGE_DONE:
+                self.gate.announce()
+            return True
+
+    async def stage(self) -> str:
+        c = self.container
+        if c is None:
+            return STAGE_STORAGE
+        mode = await c.settings.get("auth_mode")
+        if mode == MODE_KEYSTONE:
+            return STAGE_DONE
+        if mode == MODE_LOCAL:
+            async with c.db.session() as s:
+                if await UserRepo(s).count_admins():
+                    return STAGE_DONE
+        return STAGE_ACCOUNT
+
+    async def start(self) -> None:
+        if not await self.activate():
+            self.gate.announce()
+
+        async def watch():
+            while self.container is None:
+                await asyncio.sleep(WATCH_SECONDS)
+                await self.activate()
+        if self.container is None:
+            self._task = asyncio.create_task(watch(), name="setup-watch")
+
+    async def stop(self) -> None:
+        if self._task:
+            self._task.cancel()
+        if self.container is not None:
+            await self.container.stop()
+
+
+__all__ = ["STAGE_ACCOUNT", "STAGE_DONE", "STAGE_STORAGE", "SetupState"]

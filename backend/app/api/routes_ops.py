@@ -4,8 +4,13 @@ import uuid
 
 from fastapi import APIRouter, Depends, File, Request, UploadFile
 from fastapi.responses import StreamingResponse
+from pydantic import BaseModel, Field
 
 from ..container import Container
+from ..domain.errors import DomainError
+from ..domain.models import Role
+from ..services.identity.spa import MODE_LOCAL
+from ..services.settings import INFRA
 from .deps import Principal, admin, container, current, viewer
 from .schemas import ServerConfigIn
 
@@ -137,7 +142,79 @@ async def settings_put(body: dict, p: Principal = Depends(admin), c: Container =
     res = await c.settings.update(body)
     async with c.db.session() as s:
         c.audit.record(s, p.actor, "settings.updated", "settings", "", "", **{k: str(v) for k, v in body.items()})
+    if set(body) & INFRA and await c.rc.refresh_now() and body.get("router_host"):
+        await c.devices.seed_router()
     return res
+
+
+# The infrastructure: the SSH key of the panel, checks, the storage it runs on ------------------------------------
+
+@router.get("/infra")
+async def infra(_: Principal = Depends(admin), c: Container = Depends(container)):
+    st = c.storage
+    return {"ssh_public_key": await c.ssh_keys.ensure(),
+            "storage": {"postgres": c.db.engine.url.render_as_string(hide_password=True), "timescaledb": c.db.timescale,
+                        "clickhouse": st.clickhouse_url, "openbao": st.bao_addr},
+            "gateway_client": c.files.has_awg_conf()}
+
+
+class CheckIn(BaseModel):
+    target: str = Field(pattern="^(router|vps)$")
+
+
+@router.post("/infra/check")
+async def infra_check(body: CheckIn, _: Principal = Depends(admin), c: Container = Depends(container)):
+    """Connects over SSH with the key of the panel and runs a harmless command."""
+    await c.ssh_keys.ensure()
+    try:
+        if body.target == "router":
+            out = await c.router.status()
+            return {"ok": True, "detail": f"RouterOS {out.get('version', '')}".strip()}
+        info = await c.vpn_gateway.versions()
+        return {"ok": True, "detail": ", ".join(f"{k} {v}" for k, v in info.items() if v)}
+    except DomainError as e:
+        return {"ok": False, "detail": e.message}
+
+
+@router.post("/gateway/client")
+async def gateway_client(p: Principal = Depends(admin), c: Container = Depends(container)):
+    """Creates the AmneziaWG client of the gateway itself and writes its config for the awg-client container."""
+    created = await c.clients.create(p.actor, name="home-gateway", note="The gateway of the panel (awg-client)",
+                                     tags=["gateway"], server="amnezia")
+    bundle = await c.clients.bundle(p.actor, uuid.UUID(created["id"]))
+    try:
+        c.files.write_awg_conf(bundle.config)
+    except OSError as e:
+        raise DomainError(f"The client is created, but its config could not be written: {e}") from e
+    async with c.db.session() as s:
+        c.audit.record(s, p.actor, "gateway.client_written", "client", created["id"], "home-gateway")
+    return {"ok": True, "client_id": created["id"]}
+
+
+# People -----------------------------------------------------------------------------------------------------------
+
+class UserIn(BaseModel):
+    username: str = Field(min_length=1, max_length=64)
+    display_name: str = Field(default="", max_length=128)
+    email: str = Field(default="", max_length=256)
+    role: Role = Role.VIEWER
+    password: str = Field(max_length=256)
+
+
+class UserPatch(BaseModel):
+    display_name: str | None = Field(default=None, max_length=128)
+    email: str | None = Field(default=None, max_length=256)
+    role: Role | None = None
+    is_active: bool | None = None
+
+
+class PasswordResetIn(BaseModel):
+    password: str = Field(max_length=256)
+
+
+async def _local_mode(c: Container) -> None:
+    if await c.settings.get("auth_mode") != MODE_LOCAL:
+        raise DomainError("Users are managed in Keystone")
 
 
 @router.get("/users")
@@ -145,9 +222,82 @@ async def users(_: Principal = Depends(admin), c: Container = Depends(container)
     return await c.users.list()
 
 
+@router.post("/users")
+async def users_create(body: UserIn, p: Principal = Depends(admin), c: Container = Depends(container)):
+    await _local_mode(c)
+    return await c.users.create(p.actor, body.username, body.display_name, body.role, body.password, email=body.email)
+
+
+@router.patch("/users/{user_id}")
+async def users_update(user_id: int, body: UserPatch, p: Principal = Depends(admin), c: Container = Depends(container)):
+    await _local_mode(c)
+    return await c.users.update(p.actor, user_id, **body.model_dump(exclude_unset=True))
+
+
+@router.post("/users/{user_id}/password")
+async def users_password(user_id: int, body: PasswordResetIn, p: Principal = Depends(admin),
+                         c: Container = Depends(container)):
+    await _local_mode(c)
+    await c.users.reset_password(p.actor, user_id, body.password)
+    return {"ok": True}
+
+
+@router.post("/users/{user_id}/totp/disable")
+async def users_totp_disable(user_id: int, p: Principal = Depends(admin), c: Container = Depends(container)):
+    await _local_mode(c)
+    await c.auth.totp_disable(user_id, p.actor)
+    return {"ok": True}
+
+
+@router.delete("/users/{user_id}")
+async def users_delete(user_id: int, p: Principal = Depends(admin), c: Container = Depends(container)):
+    await _local_mode(c)
+    await c.users.delete(p.actor, user_id)
+    return {"ok": True}
+
+
+# Keystone (SPA): the connection, moving the local users, the sign-in mode -----------------------------------------
+
+class KeyIn(BaseModel):
+    key: str = Field(min_length=8, max_length=4096)
+
+
+class SwitchIn(BaseModel):
+    purge_local: bool = False
+
+
 @router.get("/spa")
 async def spa_status(_: Principal = Depends(admin), c: Container = Depends(container)):
     return await c.spa.status()
+
+
+@router.put("/spa/key")
+async def spa_key(body: KeyIn, p: Principal = Depends(admin), c: Container = Depends(container)):
+    return await c.spa.set_key(body.key, p.actor)
+
+
+@router.delete("/spa/key")
+async def spa_key_remove(p: Principal = Depends(admin), c: Container = Depends(container)):
+    await c.spa.remove_key(p.actor)
+    return {"ok": True}
+
+
+@router.post("/spa/import")
+async def spa_import(p: Principal = Depends(admin), c: Container = Depends(container)):
+    await _local_mode(c)
+    return await c.spa.import_local_users(c.auth, p.actor)
+
+
+@router.post("/spa/switch")
+async def spa_switch(body: SwitchIn, p: Principal = Depends(admin), c: Container = Depends(container)):
+    await _local_mode(c)
+    return await c.spa.switch_to_keystone(c.auth, p.actor, body.purge_local)
+
+
+@router.post("/auth/local")
+async def auth_local(p: Principal = Depends(admin), c: Container = Depends(container)):
+    await c.spa.switch_to_local(p.actor)
+    return {"ok": True}
 
 
 @router.post("/spa/sync")

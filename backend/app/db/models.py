@@ -22,9 +22,10 @@ class TimestampMixin:
 
 
 class PanelUser(TimestampMixin, Base):
-    """A person who may use Network Control: a record synchronised from SPA (source "spa", external_id = the SPA user
-    ID). Sign-in, passwords, MFA and role assignment are in SPA; the record keeps the ID for ownership and the audit.
-    Records from before SPA (source "local") are bound to SPA once by username, or disabled by the first sync."""
+    """A person who may use Network Control: a local user (source "local", signs in with a password kept in OpenBao)
+    or a record synchronised from Keystone / SPA (source "spa", external_id = the SPA user ID). When the panel moves to
+    Keystone, local records are bound to SPA once by username. Nothing secret is kept here: password hashes and TOTP
+    secrets are in OpenBao (services/auth.py)."""
     __tablename__ = "panel_users"
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     username: Mapped[str] = mapped_column(String(64), unique=True)
@@ -37,6 +38,11 @@ class PanelUser(TimestampMixin, Base):
     email: Mapped[str] = mapped_column(String(256), default="", server_default="")
     groups: Mapped[list[str]] = mapped_column(ARRAY(String(128)), default=list, server_default="{}")
     synced_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
+    totp_enabled: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    must_change_password: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    failed_attempts: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    locked_until: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
+    password_changed_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class PanelSession(TimestampMixin, Base):
@@ -47,6 +53,8 @@ class PanelSession(TimestampMixin, Base):
     last_seen_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     ip: Mapped[str] = mapped_column(String(64), default="")
     user_agent: Mapped[str] = mapped_column(String(256), default="")
+    # A local sign-in waiting for its TOTP code: not a session yet.
+    pending_2fa: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
 
 
 class VpnClient(TimestampMixin, Base):

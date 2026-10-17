@@ -9,6 +9,12 @@ def utcnow() -> dt.datetime:
     return dt.datetime.now(dt.timezone.utc)
 
 
+def current(value):
+    """A setting handed to a service either as a value or as a function that returns the current value (the settings
+    change while the panel runs, app/runtime.py)."""
+    return value() if callable(value) else value
+
+
 @dataclass(frozen=True)
 class Actor:
     username: str
