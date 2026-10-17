@@ -155,7 +155,7 @@ cd /opt/network-control
 | `ghcr.io/sbrw-evc/network-control-awg-client` | linux/amd64 |
 
 Версия задаётся `NC_VERSION` в `.env`; `install.sh` скачивает образы, `docker compose up -d --build` собирает их локально.
-На странице релиза также есть `network-control-X.Y.Z-deploy.tar.gz` — всё необходимое для запуска без клонирования репозитория.
+На странице релиза также есть `harbor-X.Y.Z-deploy.tar.gz` — всё необходимое для запуска без клонирования репозитория.
 
 ## Разработка
 
