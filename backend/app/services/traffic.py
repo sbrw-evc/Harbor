@@ -82,6 +82,9 @@ class TrafficCollector:
     async def _collect(self) -> tuple[dict, bool]:
         runtime, ok = {}, True
         for b in self._backends:
+            if not await b.configured():
+                await self._alerts.resolve(b.alert_key)
+                continue
             try:
                 runtime.update(await b.runtime())
             except ExternalServiceError as e:
@@ -112,6 +115,8 @@ class TrafficCollector:
 
     async def purge(self, retention_days: int) -> None:
         before = utcnow() - dt.timedelta(days=retention_days)
+        # On TimescaleDB whole chunks go first (cheap); the DELETE below takes what is left of the boundary chunk.
+        await self._db.drop_chunks(("traffic_buckets", "connection_events"), before)
         async with self._db.session() as s:
             await TrafficRepo(s).purge(before)
             await ConnectionRepo(s).purge(before)

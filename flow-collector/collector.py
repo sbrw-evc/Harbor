@@ -26,6 +26,7 @@ EXTRA_LAN: list = []
 GATEWAY = os.environ.get("GATEWAY_IP", "192.168.0.210")
 VPN_HOST = os.environ.get("AWG_HOST", "")
 ROUTER = os.environ.get("ROUTER_HOST", "")
+CONFIG_FILE = os.environ.get("COLLECTOR_CONFIG", "/shared/collector.json")
 GEO_DIR = os.environ.get("GEOIP_DIR", "/data")
 LISTEN = os.environ.get("FLOW_LISTEN", "netflow://:2055,sflow://:6343")
 KEEP_INTERNAL = os.environ.get("KEEP_INTERNAL", "1") == "1"
@@ -180,11 +181,41 @@ class Classifier:
                 "SamplingRate": rate, "ServicePort": service_port(lport, rport)}
 
 
+def load_config(path: str = CONFIG_FILE) -> bool:
+    """Reads collector.json, written by the panel from its settings (the networks that count as local, the gateway,
+    the VPS, the router, ClickHouse). Returns whether the ClickHouse connection changed. Without the file the
+    environment of older installations stays in force."""
+    global LAN, GATEWAY, VPN_HOST, ROUTER, CH_URL, CH_USER, CH_PASSWORD, CH_DB
+    try:
+        with open(path) as f:
+            cfg = json.load(f)
+    except (OSError, ValueError):
+        return False
+    nets = []
+    for n in str(cfg.get("lan_cidr") or "").split(","):
+        try:
+            nets.append(ipaddress.ip_network(n.strip(), strict=False))
+        except ValueError:
+            continue
+    LAN = nets or LAN
+    GATEWAY = cfg.get("gateway_ip") or GATEWAY
+    VPN_HOST = cfg.get("awg_host") or ""
+    ROUTER = cfg.get("router_host") or ""
+    ch = cfg.get("clickhouse") or {}
+    new = (ch.get("url") or CH_URL, ch.get("user") or CH_USER, ch.get("password", CH_PASSWORD), ch.get("database") or CH_DB)
+    changed = new != (CH_URL, CH_USER, CH_PASSWORD, CH_DB)
+    CH_URL, CH_USER, CH_PASSWORD, CH_DB = new
+    return changed
+
+
 class ClickHouseWriter:
     def __init__(self):
+        self.connect()
+        self.written = 0
+
+    def connect(self) -> None:
         self._http = httpx.AsyncClient(base_url=CH_URL, timeout=60,
                                        headers={"X-ClickHouse-User": CH_USER, "X-ClickHouse-Key": CH_PASSWORD})
-        self.written = 0
 
     async def wait_ready(self) -> None:
         while True:
@@ -230,6 +261,11 @@ class ClickHouseWriter:
 
 
 async def run() -> None:
+    load_config()
+    while not CH_PASSWORD and not os.path.exists(CONFIG_FILE):
+        log.info("waiting for %s: finish the setup wizard of the panel", CONFIG_FILE)
+        await asyncio.sleep(10)
+        load_config()
     geo = GeoEnricher(GEO_DIR)
     await geo.refresh()
     classify = Classifier(geo)
@@ -264,6 +300,9 @@ async def run() -> None:
 
     async def networks() -> None:
         while True:
+            if load_config():
+                log.info("ClickHouse settings changed: reconnecting")
+                writer.connect()
             nets = await writer.local_networks()
             EXTRA_LAN[:] = nets
             await asyncio.sleep(60)

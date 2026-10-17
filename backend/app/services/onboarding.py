@@ -17,7 +17,7 @@ from urllib.parse import urlsplit
 from sqlalchemy import func, select
 
 from ..db.base import Database
-from ..db.models import FlowRule, NetworkDevice, NetworkEndpoint, PanelUser, SavedView, VpnClient
+from ..db.models import Alert, FlowRule, NetworkDevice, NetworkEndpoint, PanelUser, SavedView, VpnClient
 from ..db.repositories import SettingRepo
 from ..domain.models import Role
 from .routing import CUSTOM_KEY, SITE_LIST_KEY
@@ -30,6 +30,9 @@ LOOPBACK = {"localhost", "127.0.0.1", "::1", "0.0.0.0"}
 
 # The steps of the "First steps" checklist, in the order to do them.
 STEP_SPA = "spa"
+STEP_ROUTER = "router"
+STEP_VPS = "vps"
+STEP_GATEWAY = "gateway"
 STEP_ADDRESS = "address"
 STEP_DEVICE = "device"
 STEP_FLOWS = "flows"
@@ -57,6 +60,13 @@ def is_public_address(url: str) -> bool:
 @dataclass
 class Facts:
     """What the checklist and the guides are computed from, read in one pass."""
+    local_mode: bool = False
+    local_admins: int = 0
+    router_set: bool = False
+    vps_set: bool = False
+    vps_ok: bool = False
+    gateway_set: bool = False
+    gateway_client: bool = False
     spa_connected: bool = False
     spa_synced: bool = False
     spa_error: bool = False
@@ -99,7 +109,12 @@ class Step:
 
 def _checklist(f: Facts) -> list[Step]:
     return [
-        Step(STEP_SPA, f.spa_connected and f.spa_synced and not f.spa_error and f.spa_admins > 0, path="/settings#spa"),
+        # Sign-in: a local administrator (standalone) or a working Keystone connection with an administrator.
+        Step(STEP_SPA, f.local_admins > 0 if f.local_mode
+             else f.spa_connected and f.spa_synced and not f.spa_error and f.spa_admins > 0, path="/settings#spa"),
+        Step(STEP_ROUTER, f.router_set and f.router_up, path="/settings#infrastructure"),
+        Step(STEP_VPS, f.vps_set and f.vps_ok, optional=True, path="/settings#infrastructure"),
+        Step(STEP_GATEWAY, f.gateway_set and f.gateway_client, optional=True, path="/settings#infrastructure"),
         Step(STEP_ADDRESS, f.address, path="/settings#spa"),
         Step(STEP_DEVICE, f.devices_up > 0, path="/devices"),
         Step(STEP_FLOWS, f.flows, path="/flows?tab=exporters" if f.devices_up else "/devices", role=Role.OPERATOR),
@@ -156,7 +171,9 @@ def _result(steps: list[Step], role: Role) -> dict:
 
 
 class OnboardingService:
-    def __init__(self, db: Database, settings: SettingsService, spa, notifier, backups, flows, public_urls: list[str]):
+    def __init__(self, db: Database, settings: SettingsService, spa, notifier, backups, flows, public_urls: list[str],
+                 gateway_client=None):
+        self._gateway_client = gateway_client or (lambda: False)
         self._db = db
         self._settings = settings
         self._spa = spa
@@ -194,6 +211,9 @@ class OnboardingService:
             f.vpn_clients = await n(VpnClient, people)
             f.configs_issued = await n(VpnClient, people, VpnClient.config_downloaded_at.is_not(None)) > 0
             f.clients_connected = await n(VpnClient, people, VpnClient.last_handshake_at.is_not(None)) > 0
+            f.local_admins = await n(PanelUser, PanelUser.source == "local", PanelUser.is_active.is_(True),
+                                     PanelUser.role == Role.ADMIN)
+            f.vps_ok = await n(Alert, Alert.key == "server.unreachable", Alert.resolved_at.is_(None)) == 0
             f.spa_admins = await n(PanelUser, PanelUser.source == "spa", PanelUser.external_id.is_not(None),
                                    PanelUser.is_active.is_(True), PanelUser.role == Role.ADMIN)
             stored = await SettingRepo(s).get_all()
@@ -210,6 +230,11 @@ class OnboardingService:
         f.spa_synced = bool(spa.get("last_sync_at"))
         f.spa_error = bool(spa.get("error"))
         f.address = any(is_public_address(u) for u in self._public_urls)
+        f.local_mode = await self._settings.get("auth_mode") != "keystone"
+        f.router_set = bool(settings.get("router_host"))
+        f.vps_set = bool(settings.get("awg_host"))
+        f.gateway_set = bool(settings.get("gateway_ip"))
+        f.gateway_client = bool(self._gateway_client())
 
         async def telegram() -> bool:
             return bool(settings.get("notify_enabled")) and await self._notifier.configured()

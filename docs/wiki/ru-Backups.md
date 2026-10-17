@@ -18,19 +18,19 @@
 - Вручную — **Резервные копии → Создать копию** или `docker compose exec backend python -m app.cli backup`.
 - Скачивание — кнопка в списке (фиксируется в аудите).
 
-Отдельно храните `openbao/keys/unseal.key`, `data/bao-init/init.json` и `.env`.
+Отдельно храните `openbao/keys/unseal.key`, root-токен OpenBao из мастера настройки, `data/backend/bootstrap.json`, `data/backend/approle/` и `.env`.
 
 ## Восстановление
 
-1. Разверните проект, верните `.env`, `openbao/keys/unseal.key` и `data/bao-init/init.json`.
-2. Запустите `postgres`, `openbao`, `bao-init`.
+1. Разверните проект, верните `.env`, `openbao/keys/unseal.key`, `data/backend/bootstrap.json` и `data/backend/approle/`.
+2. Запустите `postgres` и `openbao`: `docker compose up -d postgres openbao`.
 3. Восстановите OpenBao:
 
    ```bash
    tar xzf network-control-*.tar.gz openbao.snap
    docker cp openbao.snap nc-openbao:/tmp/
    docker exec -e BAO_ADDR=http://127.0.0.1:8200 \
-     -e BAO_TOKEN=$(sed -n 's/.*"root_token": *"\([^"]*\)".*/\1/p' data/bao-init/init.json) \
+     -e BAO_TOKEN=<root-токен, показанный мастером настройки> \
      nc-openbao bao operator raft snapshot restore -force /tmp/openbao.snap
    ```
 

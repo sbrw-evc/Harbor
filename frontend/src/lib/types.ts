@@ -3,7 +3,11 @@ export type ClientStatus = "active" | "blocked" | "missing";
 export type Severity = "info" | "warning" | "critical";
 export type Range = "1h" | "24h" | "7d" | "30d" | "90d";
 
-/** A person who may use Network Control, synchronised from SPA (sign-in, passwords and roles are managed there). */
+/** How people sign in: local users of the panel, or Keystone (SPA). */
+export type AuthMode = "local" | "keystone";
+
+/** A person who may use Network Control: a local user (password and TOTP kept in OpenBao) or a record synchronised from
+ * Keystone (SPA). */
 export interface PanelUser {
   id: number;
   username: string;
@@ -14,21 +18,63 @@ export interface PanelUser {
   source: "spa" | "local";
   external_id: string | null;
   groups: string[];
+  totp_enabled: boolean;
+  must_change_password: boolean;
+  locked: boolean;
   created_at: string | null;
   last_login_at: string | null;
   synced_at: string | null;
 }
 
-/** What the sign-in page needs to know about SPA. */
+/** What the sign-in page needs to know: the mode, and for Keystone whether it is connected. */
 export interface AuthConfig {
+  mode: AuthMode;
   connected: boolean;
   issuer: string | null;
   account_url: string | null;
   error: string | null;
 }
 
+/** The setup wizard (before the first administrator exists). */
+export type SetupStage = "storage" | "account" | "done";
+export interface SetupState {
+  stage: SetupStage;
+  defaults: {
+    postgres: { host: string; port: number; database: string; user: string };
+    clickhouse: { url: string; user: string; database: string };
+    openbao: { addr: string; mode: "bundled" | "external" };
+  } | null;
+  error: string | null;
+}
+export interface StorageInput {
+  postgres: { host: string; port: number; database: string; user: string; password: string };
+  clickhouse: { url: string; user: string; password: string; database: string };
+  openbao: { addr: string; mode: "bundled" | "external"; root_token?: string; role_id?: string; secret_id?: string; mount?: string };
+}
+export interface StorageCheck {
+  postgres: { ok: boolean; error?: string; version?: string; timescaledb?: boolean };
+  clickhouse: { ok: boolean; error?: string; version?: string };
+  openbao: { ok: boolean; error?: string; initialized?: boolean; sealed?: boolean; version?: string };
+}
+
+/** The infrastructure card of the settings page. */
+export interface InfraInfo {
+  ssh_public_key: string;
+  storage: { postgres: string; timescaledb: boolean; clickhouse: string; openbao: string };
+  gateway_client: boolean;
+}
+
+export interface ImportReport {
+  imported: { username: string; id: string }[];
+  conflicts: { username: string; reason: string }[];
+  rejected: { username: string; reason: string }[];
+}
+
 /** The SPA connection as the settings page shows it. */
 export interface SpaStatus {
+  mode: AuthMode;
+  user_import: boolean;
+  last_import: { at: string; imported: number; conflicts: number; rejected: number } | null;
   connected: boolean;
   issuer: string | null;
   client_id: string | null;

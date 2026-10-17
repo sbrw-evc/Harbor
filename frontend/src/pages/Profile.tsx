@@ -1,11 +1,12 @@
 import { useQuery } from "@tanstack/react-query";
-import { ExternalLink, LogOut, Monitor, ShieldCheck, UserCircle } from "lucide-react";
-import type { ReactNode } from "react";
+import { ExternalLink, KeyRound, LogOut, Monitor, ShieldCheck, UserCircle } from "lucide-react";
+import { useState, type FormEvent, type ReactNode } from "react";
 import { api } from "@/lib/api";
 import { Fmt, ROLE_LABEL } from "@/lib/format";
 import { useAction } from "@/lib/hooks";
 import { useAuth } from "@/store/auth";
-import { Badge, Card, Page, PageHeader } from "@/components/ui/Primitives";
+import { Badge, Card, Field, Page, PageHeader } from "@/components/ui/Primitives";
+import PasswordInput from "@/components/ui/PasswordInput";
 import { t } from "@/i18n";
 
 function Row({ label, children }: { label: string; children: ReactNode }) {
@@ -17,12 +18,70 @@ function Row({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
+/** The local mode: the password and the TOTP of the signed-in person (both kept in OpenBao). */
+function LocalSecurity() {
+  const { user, bootstrap } = useAuth();
+  const [pw, setPw] = useState({ current: "", next: "", repeat: "" });
+  const [totp, setTotp] = useState<{ secret: string; qr_svg: string } | null>(null);
+  const [code, setCode] = useState("");
+  const change = useAction(() => api.auth.changePassword(pw.current, pw.next), {
+    success: t("The password is changed; your other sessions are ended"), invalidate: [["sessions"]],
+    onSuccess: () => { setPw({ current: "", next: "", repeat: "" }); bootstrap(); },
+  });
+  const setup = useAction(() => api.auth.totpSetup(), { onSuccess: (r) => setTotp(r) });
+  const enable = useAction(() => api.auth.totpEnable(code), {
+    success: t("Two-factor authentication is on"), onSuccess: () => { setTotp(null); setCode(""); bootstrap(); },
+  });
+  const disable = useAction(() => api.auth.totpDisable(), { success: t("Two-factor authentication is off"), onSuccess: () => bootstrap() });
+  const submit = (e: FormEvent) => { e.preventDefault(); change.mutate(undefined); };
+  const mismatch = pw.repeat !== "" && pw.next !== pw.repeat;
+
+  return (
+    <>
+      <Card title={<span className="flex items-center gap-2"><KeyRound size={14} /> {t("Password")}</span>}>
+        <form onSubmit={submit} className="space-y-3">
+          {user?.must_change_password && <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-200">{t("Set your own password to go on working with the panel.")}</div>}
+          <Field label={t("Current password")}><PasswordInput autoComplete="current-password" value={pw.current} onChange={(e) => setPw({ ...pw, current: e.target.value })} /></Field>
+          <Field label={t("New password")} hint={t("at least 10 characters, mixed case or digits")}><PasswordInput autoComplete="new-password" value={pw.next} onChange={(e) => setPw({ ...pw, next: e.target.value })} /></Field>
+          <Field label={t("Repeat")} hint={mismatch ? <span className="text-red-300">{t("the passwords differ")}</span> : undefined}><PasswordInput autoComplete="new-password" value={pw.repeat} onChange={(e) => setPw({ ...pw, repeat: e.target.value })} /></Field>
+          <button className="btn-primary" disabled={!pw.current || !pw.next || mismatch || change.isPending}>{t("Change the password")}</button>
+        </form>
+      </Card>
+      <Card title={<span className="flex items-center gap-2"><ShieldCheck size={14} /> {t("Two-factor authentication")}</span>}>
+        {user?.totp_enabled ? (
+          <div className="space-y-3">
+            <Badge tone="green"><ShieldCheck size={12} /> {t("on")}</Badge>
+            <p className="text-sm text-slate-400">{t("A code from the authenticator app is asked at every sign-in. The secret is kept in OpenBao.")}</p>
+            <button className="btn-danger" disabled={disable.isPending} onClick={() => disable.mutate(undefined)}>{t("Turn off")}</button>
+          </div>
+        ) : totp ? (
+          <div className="grid gap-4 sm:grid-cols-[180px_1fr]">
+            <div className="qr" dangerouslySetInnerHTML={{ __html: totp.qr_svg }} />
+            <div className="space-y-3">
+              <p className="text-sm text-slate-300">{t("Scan the QR code with Google Authenticator, Aegis or 1Password and enter the code.")}</p>
+              <div className="mono break-all text-xs text-slate-500">{totp.secret}</div>
+              <input className="input text-center font-mono text-xl tracking-[.4em]" maxLength={6} inputMode="numeric" value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))} />
+              <button className="btn-primary" disabled={code.length < 6 || enable.isPending} onClick={() => enable.mutate(undefined)}>{t("Confirm and turn on")}</button>
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <p className="text-sm text-slate-400">{t("Protect the sign-in with one-time codes (TOTP).")}</p>
+            <button className="btn-primary" disabled={setup.isPending} onClick={() => setup.mutate(undefined)}>{t("Set up")}</button>
+          </div>
+        )}
+      </Card>
+    </>
+  );
+}
+
 export default function Profile() {
   const user = useAuth((s) => s.user);
   const sessions = useQuery({ queryKey: ["sessions"], queryFn: () => api.auth.sessions() });
   const config = useQuery({ queryKey: ["auth-config"], queryFn: () => api.auth.config() });
   const revoke = useAction((id: string) => api.auth.revokeSession(id), { invalidate: [["sessions"]] });
   const account = config.data?.account_url;
+  const local = config.data?.mode === "local";
 
   return (
     <Page>
@@ -40,7 +99,7 @@ export default function Profile() {
           </dl>
         </Card>
 
-        <Card title={<span className="flex items-center gap-2"><ShieldCheck size={14} /> {t("Account and security")}</span>}>
+        {local ? <LocalSecurity /> : <Card title={<span className="flex items-center gap-2"><ShieldCheck size={14} /> {t("Account and security")}</span>}>
           <div className="space-y-3">
             <p className="text-sm text-slate-400">
               {t("Your account, password, passkeys and two-factor authentication are managed in SPA — Single Point of Authorization. Your role in Network Control is given there by an SPA administrator.")}
@@ -51,7 +110,7 @@ export default function Profile() {
               <p className="text-xs text-slate-500">{t("The address of the SPA account page is not known yet.")}</p>
             )}
           </div>
-        </Card>
+        </Card>}
       </div>
 
       <Card title={<span className="flex items-center gap-2"><Monitor size={14} /> {t("Active sessions")}</span>} bodyClass="p-0">

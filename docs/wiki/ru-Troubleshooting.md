@@ -35,23 +35,23 @@ ip rule; ip route show table 200
 
 ## Потоки не появляются
 
-- `/ip traffic-flow print` — `enabled: yes`, есть target на `GATEWAY_IP:2055`.
+- `/ip traffic-flow print` — `enabled: yes`, есть target на адрес шлюза, порт 2055.
 - `docker compose logs flow-collector` — строка `goflow2 listening`; раз в 5 минут — счётчики received/written.
 - Брандмауэр хоста шлюза должен пропускать UDP 2055.
 
 ## Вход в панель
 
-- «Это приложение не подключено к SPA» — задайте `SPA_CONNECTION_KEY` (см. [[Конфигурация|ru-Configuration]]); повреждённый ключ показывается на той же странице.
+- «Это приложение не подключено к SPA» — вставьте ключ подключения в «Настройки → SPA» (см. [[Конфигурация|ru-Configuration]]); повреждённый ключ показывается на той же странице.
 - «У вас нет роли в Network Control» — администратор SPA должен выдать вам `admin`, `operator` или `viewer`.
 - Пароли, ключи доступа и MFA управляются в SPA (меню пользователя → Учётная запись и безопасность).
-- «SPA отклонил ключ подключения» в настройках — ключ перевыпущен в SPA: укажите новый в `.env`.
+- «SPA отклонил ключ подключения» в настройках — ключ перевыпущен в SPA: вставьте новый в «Настройки → SPA».
 - Старый интерфейс после обновления — `Ctrl+F5` (HTML не кэшируется, ресурсы версионированы).
 
 ## OpenBao
 
 ```bash
 docker exec nc-openbao bao status -address=http://127.0.0.1:8200
-docker compose logs bao-init
+docker compose logs backend | grep -i -E "openbao|setup"
 ```
 
 `Sealed: true` после перезапуска — проверьте наличие и права `openbao/keys/unseal.key` (владелец — пользователь openbao).
@@ -73,7 +73,7 @@ docker compose logs bao-init
 
 1. На VPS: `sh vps/github-proxy/install.sh` (задайте `PAC_PROXIES=<шлюз>:3128,10.8.1.0:3128`). Скрипт включает BBR
    и запускает `gh-proxy` (HTTPS CONNECT, только порт 443) на адресе туннеля `10.8.1.0:3128`.
-2. На шлюзе: `PORT_FORWARDS=3128=10.8.1.0:3128` в `.env`, затем `docker compose up -d awg-client` —
+2. На шлюзе: «Настройки → Шлюз и локальная сеть → Пробросы портов» `3128=10.8.1.0:3128` (awg-client сам перезапустит туннель) —
    прокси доступен в LAN как `<шлюз>:3128`.
 3. Git: `git config --global http.https://github.com/.proxy http://<шлюз>:3128`.
 4. Браузер: системный прокси «Использовать сценарий настройки» — `http://<шлюз>:3128/proxy.pac` (только домены

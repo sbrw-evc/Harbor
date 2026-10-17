@@ -62,3 +62,22 @@ def test_ipv6_local_and_special(collector):
 def test_missing_exporter(collector):
     _, classify = collector
     assert classify(gf(sampler_address=""))["ExporterAddress"] == "::ffff:0.0.0.0"
+
+
+def test_settings_from_the_panel(tmp_path):
+    """collector.json, written by the panel, replaces the environment and is re-read while running."""
+    import json
+    spec = importlib.util.spec_from_file_location("nc_collector_cfg", PATH)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    path = tmp_path / "collector.json"
+    assert mod.load_config(str(path)) is False  # no file: the environment stays
+    path.write_text(json.dumps({"lan_cidr": "10.20.0.0/16,bad,10.9.0.0/24", "gateway_ip": "10.20.0.2",
+                                "awg_host": "203.0.113.10", "router_host": "10.20.0.1",
+                                "clickhouse": {"url": "http://ch:8123", "user": "u", "password": "p", "database": "f"}}))
+    assert mod.load_config(str(path)) is True
+    assert mod.LAN == [ipaddress.ip_network("10.20.0.0/16"), ipaddress.ip_network("10.9.0.0/24")]
+    assert (mod.GATEWAY, mod.VPN_HOST, mod.ROUTER) == ("10.20.0.2", "203.0.113.10", "10.20.0.1")
+    assert (mod.CH_URL, mod.CH_USER, mod.CH_PASSWORD, mod.CH_DB) == ("http://ch:8123", "u", "p", "f")
+    assert mod.is_local(ipaddress.ip_address("10.20.5.5"))
+    assert mod.load_config(str(path)) is False  # the same ClickHouse: no reconnect

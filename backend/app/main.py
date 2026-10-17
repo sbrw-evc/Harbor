@@ -5,9 +5,10 @@ from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
-from .api import routes_admin, routes_auth, routes_clients, routes_devices, routes_flows, routes_onboarding, routes_ops
+from .api import (routes_admin, routes_auth, routes_clients, routes_devices, routes_flows, routes_onboarding, routes_ops,
+                  routes_setup)
 from .config import get_settings
-from .container import Container
+from .setup import SetupState
 from .domain.errors import DomainError
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -18,11 +19,13 @@ VERSION = "2.0.0"
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    c = Container(get_settings())
-    app.state.container = c
-    await c.start()
+    # Before the setup wizard has chosen the storage the process serves only /api/setup; it starts the container as
+    # soon as <data>/bootstrap.json exists (app/setup.py).
+    app.state.container = None
+    st = app.state.setup = SetupState(get_settings(), app.state)
+    await st.start()
     yield
-    await c.stop()
+    await st.stop()
 
 
 app = FastAPI(title="Network Control", version=VERSION, lifespan=lifespan, docs_url="/api/docs", redoc_url=None,
@@ -52,5 +55,5 @@ async def health():
 
 
 for r in (routes_auth.router, routes_clients.router, routes_clients.public, routes_ops.router, routes_admin.router,
-          routes_flows.router, routes_devices.router, routes_onboarding.router):
+          routes_flows.router, routes_devices.router, routes_onboarding.router, routes_setup.router):
     app.include_router(r)

@@ -48,7 +48,7 @@ and the address the device exports flows from. **Test connection** collects ever
 was found. **Find in network** probes an address or a subnet (up to /22) — SSH banner, web interface and SNMP
 sysObjectID — and suggests the platform.
 
-On the first start the router from `ROUTER_HOST` is added automatically (MikroTik over SSH with the panel key from
+When the router address is set (Settings → Router), the router is added automatically (MikroTik over SSH with the panel key from
 OpenBao `infra/ssh`, RouterOS 7.13+). For RouterOS below 7.13 switch it to the REST API or SNMP.
 
 ### Accounts on the devices
@@ -79,7 +79,7 @@ successful poll. **Poll now** on the device page runs a poll immediately.
 The **Management** tab shows only what the platform and the chosen transport support:
 
 - **Name**, **DNS**, **NTP**, **interfaces** (enable / disable, description) — operator and administrator.
-- **Flow export** — configures NetFlow v5 / v9, IPFIX or sFlow towards the panel's collector (by default `GATEWAY_IP`,
+- **Flow export** — configures NetFlow v5 / v9, IPFIX or sFlow towards the panel's collector (by default the address of the gateway,
   port 2055; sFlow — 6343). After that the device shows up under *Flow analytics → Exporters*.
 - **Reboot**, **CLI console**, **configuration backup** — administrator only.
 - **Block a client** — on UniFi, Omada and Keenetic (from the *Clients* tab or the *Network clients* page).

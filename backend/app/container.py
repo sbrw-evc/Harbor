@@ -9,18 +9,21 @@ from .services.flows import FlowService
 from .adapters.geoip import DbIpGeoLocator
 from .adapters.mikrotik import MikrotikSshRouter
 from .adapters.mikrotik_wg import MikrotikWireguard
-from .adapters.openbao import OpenBaoSecretStore
 from .adapters.oui import OuiDatabase
 from .adapters.ssh import SshKeyProvider, SshRunner
 from .adapters.telegram import TelegramNotifier
+from .bootstrap import Storage
 from .cluster import CONFIG_LOCK_KEY, DistributedLock, LeaderElection, LiveState, PgEventBus, plain_dsn
-from .config import Settings
+from .config import Settings, legacy_environ
 from .db.base import Database
+from .db.repositories import UserRepo
+from .runtime import RuntimeConfig
 from .services.alerts import AlertService
 from .services.analytics import AnalyticsService
 from .services.audit import AuditService
 from .services.auth import AuthService
-from .services.identity.spa import SYNC_SECONDS, SpaService
+from .services.gateway_files import GatewayFiles
+from .services.identity.spa import MODE_KEYSTONE, MODE_LOCAL, SECRET_PATH as SPA_KEY_SECRET, SYNC_SECONDS, SpaService
 from .services.backends import AmneziaBackend, MikrotikBackend
 from .services.backups import BackupService
 from .services.clients import VpnClientService
@@ -48,71 +51,110 @@ SPA_LOCK_KEY = 7_331_005
 
 
 class Container:
-    def __init__(self, cfg: Settings):
+    def __init__(self, cfg: Settings, storage: Storage):
         self.cfg = cfg
-        dsn = plain_dsn(cfg.database_url)
+        self.storage = storage
+        dsn = plain_dsn(storage.database_url)
         self.bus = PgEventBus(dsn)
         self.live = LiveState(self.bus)
-        self.db = Database(cfg.database_url)
+        self.db = Database(storage.database_url)
         self.startup_lock = DistributedLock(dsn, STARTUP_LOCK_KEY)
-        self.secrets = OpenBaoSecretStore(cfg.bao_addr, cfg.bao_approle_dir, cfg.bao_kv_mount)
-        keys = SshKeyProvider(self.secrets)
-        known_hosts = os.path.join(cfg.data_dir, "known_hosts")
-        self.vpn_gateway = AmneziaDockerGateway(SshRunner(cfg.awg_host, cfg.awg_ssh_user, keys, known_hosts),
-                                                cfg.awg_container, cfg.awg_dir, cfg.awg_iface, cfg.awg_bin)
-        router_ssh = SshRunner(cfg.router_host, cfg.router_ssh_user, keys, known_hosts)
-        self.router = MikrotikSshRouter(router_ssh)
-        self.mikrotik_wg = MikrotikWireguard(router_ssh, cfg.mt_wg_iface, cfg.mt_wg_network, cfg.mt_wg_port)
-        self.geo = DbIpGeoLocator(cfg.geoip_dir)
-
+        self.secrets = storage.secrets
         self.settings = SettingsService(self.db)
+        # Addresses of the VPS, the router and the gateway come from the settings and may change while running.
+        rc = self.rc = RuntimeConfig(self.settings)
+        self.ssh_keys = keys = SshKeyProvider(self.secrets)
+        known_hosts = os.path.join(cfg.data_dir, "known_hosts")
+        self.vpn_gateway = rc.adapter(lambda r: AmneziaDockerGateway(
+            SshRunner(r.awg_host, r.awg_ssh_user, keys, known_hosts), r.awg_container, r.awg_dir, r.awg_iface, r.awg_bin))
+        self.router = rc.adapter(lambda r: MikrotikSshRouter(SshRunner(r.router_host, r.router_ssh_user, keys,
+                                                                       known_hosts)))
+        self.mikrotik_wg = rc.adapter(lambda r: MikrotikWireguard(
+            SshRunner(r.router_host, r.router_ssh_user, keys, known_hosts), r.mt_wg_iface, r.mt_wg_network,
+            r.mt_wg_port))
+        self.geo = DbIpGeoLocator(cfg.geoip_dir)
+        self.files = GatewayFiles(cfg.gateway_config_dir, cfg.shared_dir, {
+            "url": storage.clickhouse_url, "user": storage.clickhouse_user, "password": storage.clickhouse_password,
+            "database": storage.clickhouse_db})
+
         self.audit = AuditService(self.db, self.bus)
         self.alerts = AlertService(self.db, self.bus)
         self.notifier = TelegramNotifier(self.secrets, lambda: self.settings.get("notify_telegram_chat_id"))
         self.notifications = NotificationService(self.notifier, self.settings)
         self.alerts.notifications = self.notifications
-        self.auth = AuthService(self.db, self.audit, cfg.session_ttl_hours)
+        self.auth = AuthService(self.db, self.audit, lambda: rc.session_ttl_hours, self.secrets)
         self.tokens = ApiTokenService(self.db, self.audit)
-        self.users = PanelUserService(self.db)
+        self.users = PanelUserService(self.db, self.auth, self.audit)
         self.spa = SpaService(self.db, self.secrets, self.settings, self.auth, self.audit,
                               key=cfg.spa_connection_key, key_file=cfg.spa_connection_key_file,
-                              public_url=cfg.spa_public_url, lock=DistributedLock(dsn, SPA_LOCK_KEY))
+                              public_url=rc.spa_public_url, lock=DistributedLock(dsn, SPA_LOCK_KEY))
+        rc.on_change(self._settings_changed)
         self.editor = ServerConfigEditor(self.vpn_gateway, DistributedLock(dsn, CONFIG_LOCK_KEY))
         self.server = ServerService(self.db, self.editor, self.audit)
-        self.amnezia = AmneziaBackend(self.editor, self.vpn_gateway, ClientConfigBuilder(cfg.awg_container),
-                                      self.settings, cfg.awg_host)
-        self.mikrotik = MikrotikBackend(self.mikrotik_wg, self.settings, DistributedLock(dsn, MT_LOCK_KEY), cfg.lan_cidr)
+        self.amnezia = AmneziaBackend(self.editor, self.vpn_gateway, ClientConfigBuilder(lambda: rc.awg_container),
+                                      self.settings, lambda: rc.awg_host)
+        self.mikrotik = MikrotikBackend(self.mikrotik_wg, self.settings, DistributedLock(dsn, MT_LOCK_KEY),
+                                        lambda: rc.lan_cidr, lambda: rc.router_host)
         backends = [self.amnezia, self.mikrotik]
         self.clients = VpnClientService(self.db, backends, self.secrets, self.settings, self.audit, self.bus,
-                                        cfg.public_base_url, self.live)
+                                        lambda: rc.public_base_url, self.live)
         self.collector = TrafficCollector(self.db, backends, self.clients, self.geo, self.alerts, self.bus)
-        self.analytics = AnalyticsService(self.db, self.live, self.alerts, self.settings, self.geo, cfg.awg_host)
+        self.analytics = AnalyticsService(self.db, self.live, self.alerts, self.settings, self.geo, lambda: rc.awg_host)
         self.policy = PolicyEnforcer(self.db, self.clients, self.alerts, self.settings)
         self.health = HealthMonitor(self.db, self.secrets, self.alerts, self.settings)
-        self.routing = RoutingService(self.db, self.router, SiteListCompiler(cfg.awg_host), self.alerts, self.audit,
-                                      {"gateway_ip": cfg.gateway_ip, "lan_cidr": cfg.lan_cidr, "vpn_host": cfg.awg_host})
+        self.routing = RoutingService(self.db, self.router, SiteListCompiler(lambda: rc.awg_host), self.alerts,
+                                      self.audit, rc.routing_ctx)
         self.backups = BackupService(self.db, self.secrets, self.settings, self.audit, cfg.backup_dir)
-        self.clickhouse = ClickHouseClient(cfg.clickhouse_url, cfg.clickhouse_user, cfg.clickhouse_password,
-                                           cfg.clickhouse_db)
+        self.clickhouse = ClickHouseClient(storage.clickhouse_url, storage.clickhouse_user, storage.clickhouse_password,
+                                           storage.clickhouse_db)
         self.flows = FlowService(self.clickhouse, self.db, self.audit)
         self.routing.flows = self.flows
         self.oui = OuiDatabase(cfg.data_dir)
         self.devices = DeviceService(self.db, self.secrets, self.audit, self.alerts, self.bus, self.settings, self.oui,
-                                     {"router_host": cfg.router_host, "router_ssh_user": cfg.router_ssh_user,
-                                      "collector_host": cfg.gateway_ip})
+                                     rc.device_ctx)
         self.detector = Detector(self.clickhouse, self.db, self.alerts, self.audit)
-        self.topology = TopologyService(self.db, self.settings, self.flows,
-                                        {"vpn_host": cfg.awg_host, "router_host": cfg.router_host})
+        self.topology = TopologyService(self.db, self.settings, self.flows, rc.topology_ctx)
         self.onboarding = OnboardingService(self.db, self.settings, self.spa, self.notifier, self.backups, self.flows,
-                                            [cfg.spa_public_url, cfg.public_base_url])
+                                            rc.public_urls, gateway_client=self.files.has_awg_conf)
         self.election = LeaderElection(dsn, self._become_leader, self._lose_leadership)
         self.scheduler: Scheduler | None = None
+
+    def _settings_changed(self, rc: RuntimeConfig) -> None:
+        self.spa.public_url = (rc.spa_public_url or "").rstrip("/")
+        self.files.write(rc)
+
+    async def _import_spa_key(self, env: dict) -> None:
+        """The SPA connection key of an older .env moves to OpenBao once (the panel manages it there now)."""
+        raw = (env.get("SPA_CONNECTION_KEY") or "").strip()
+        if not raw or self.cfg.spa_connection_key or await self.secrets.get(SPA_KEY_SECRET):
+            return
+        await self.secrets.put(SPA_KEY_SECRET, {"value": raw})
+        log.warning("the SPA connection key moved from .env to OpenBao (spa/connection_key); remove it from .env")
+
+    async def _choose_auth_mode(self) -> None:
+        """An installation from before the two modes signed in through SPA: it keeps doing so."""
+        if await self.settings.get("auth_mode"):
+            return
+        async with self.db.session() as s:
+            users = await UserRepo(s).all()
+        if any(u.source == "spa" for u in users) or await self.spa.connection() is not None:
+            await self.settings.update({"auth_mode": MODE_KEYSTONE}, internal=True)
+            log.warning("sign-in mode: keystone (the installation was connected to SPA before)")
+        elif users:
+            await self.settings.update({"auth_mode": MODE_LOCAL}, internal=True)
 
     async def start(self) -> None:
         await self.bus.start()
         await self.live.start()
         async with self.startup_lock.hold():
             await self.db.create_schema()
+            env = legacy_environ()
+            await self.rc.import_legacy_env(env)
+            await self._import_spa_key(env)
+            await self._choose_auth_mode()
+        await self.rc.refresh_now()
+        self._settings_changed(self.rc)
+        self.rc.start()
         await self.election.start()
 
     async def _become_leader(self) -> None:
@@ -126,7 +168,7 @@ class Container:
             log.exception("initial sync failed; will retry in background")
 
         async def flow_schema() -> None:
-            await self.flows.schema.ensure(self.cfg.flows_ttl_days)
+            await self.flows.schema.ensure(self.rc.flows_ttl_days)
             if not self.flows.sites_seeded:
                 await self._seed_sites()
 
@@ -187,7 +229,7 @@ class Container:
             return {}
         lists = await self.settings.get("threat_lists") or DEFAULT_THREAT_LISTS
         exclude = [x.strip() for x in str(await self.settings.get("threat_exclude") or "").replace(",", " ").split()]
-        status = await self.flows.refresh_threats(lists, exclude + [self.cfg.lan_cidr])
+        status = await self.flows.refresh_threats(lists, exclude + [self.rc.lan_cidr])
         await self.settings.update({"threat_status": status})
         return status
 
@@ -209,6 +251,7 @@ class Container:
             self.scheduler = None
 
     async def stop(self) -> None:
+        await self.rc.stop()
         await self.election.stop()
         await self._lose_leadership()
         await self.live.stop()

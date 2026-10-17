@@ -1,4 +1,6 @@
 #!/bin/sh
+# Installs or updates Network Control. The first run creates .env with random passwords for the bundled PostgreSQL and
+# ClickHouse, prepares the data folders and starts everything; the rest is done in the setup wizard of the panel.
 set -eu
 cd "$(dirname "$0")"
 
@@ -9,32 +11,37 @@ if [ ! -f .env ]; then
   sed -i "s/^POSTGRES_PASSWORD=.*/POSTGRES_PASSWORD=$(secret)/" .env
   sed -i "s/^CLICKHOUSE_PASSWORD=.*/CLICKHOUSE_PASSWORD=$(secret)/" .env
   chmod 600 .env
-  echo "Created .env — set AWG_HOST, ROUTER_HOST, GATEWAY_IP, LAN_CIDR, PUBLIC_BASE_URL, SPA_CONNECTION_KEY and run install.sh again."
-  exit 0
 fi
 
-grep -q "^AWG_HOST=203.0.113.10" .env && { echo "Set AWG_HOST in .env"; exit 1; }
-
-mkdir -p data/postgres data/openbao data/bao-init data/approle data/backend data/clickhouse data/geoip data/tiles \
+mkdir -p data/postgres data/openbao data/backend data/shared data/approle data/clickhouse data/geoip data/tiles \
   openbao/keys awg-client/config
 [ -s openbao/keys/unseal.key ] || head -c 32 /dev/urandom > openbao/keys/unseal.key
 
-BAO_IMAGE="openbao/openbao:$(sed -n 's/^OPENBAO_VERSION=//p' .env)"
+OPENBAO_VERSION=$(sed -n 's/^OPENBAO_VERSION=//p' .env); OPENBAO_VERSION=${OPENBAO_VERSION:-2.6.2}
+BAO_IMAGE="openbao/openbao:$OPENBAO_VERSION"
 docker pull -q "$BAO_IMAGE" >/dev/null
 BAO_UID=$(docker run --rm --entrypoint id "$BAO_IMAGE" -u openbao)
 BAO_GID=$(docker run --rm --entrypoint id "$BAO_IMAGE" -g openbao)
 chown -R "$BAO_UID:$BAO_GID" data/openbao openbao/keys
-chmod 700 openbao/keys data/bao-init
+chmod 700 openbao/keys data/backend data/shared
 chmod 400 openbao/keys/unseal.key
 chown 101:101 data/tiles
 
-if [ ! -s awg-client/config/awg0.conf ]; then
-  echo "Note: awg-client/config/awg0.conf is missing — the gateway tunnel will not start until you create a client for it in the panel."
-fi
-
 docker compose pull --ignore-pull-failures --quiet || true
 docker compose up -d
+
+PORT=$(sed -n 's/^PANEL_PORT=//p' .env); PORT=${PORT:-8080}
+ADDR=$(hostname -I 2>/dev/null | awk '{print $1}')
 echo
-echo "Network Control is running: $(sed -n 's/^PUBLIC_BASE_URL=//p' .env)"
-grep -q "^SPA_CONNECTION_KEY=spa1\." .env || echo "Sign-in is through SPA: set SPA_CONNECTION_KEY in .env (see the README) and run docker compose up -d backend."
-echo "Back up openbao/keys/unseal.key and data/bao-init/init.json to a safe place."
+if [ -s data/backend/bootstrap.json ]; then
+  echo "Network Control is running: http://${ADDR:-localhost}:$PORT"
+  exit 0
+fi
+for _ in $(seq 1 30); do [ -s data/backend/setup-code ] && break; sleep 2; done
+echo "Network Control is running. Open http://${ADDR:-localhost}:$PORT and finish the setup wizard."
+echo
+echo "  Setup code:           $(cat data/backend/setup-code 2>/dev/null || echo '(see: docker compose logs backend)')"
+echo "  PostgreSQL password:  $(sed -n 's/^POSTGRES_PASSWORD=//p' .env)"
+echo "  ClickHouse password:  $(sed -n 's/^CLICKHOUSE_PASSWORD=//p' .env)"
+echo
+echo "Keep openbao/keys/unseal.key and the OpenBao root token and recovery key the wizard shows in a safe place."

@@ -7,6 +7,7 @@ import qrcode
 import qrcode.image.svg
 
 from ..domain.models import ClientBundle
+from .common import current
 from .server import ServerConfig
 
 
@@ -49,7 +50,8 @@ class ClientConfigBuilder:
                     client_ip=address.split("/")[0], client_priv_key=priv, client_pub_key=pub,
                     server_pub_key=server_pub, psk_key=psk or "", clientId=pub)
         awg = dict(obfs, last_config=json.dumps(last, indent=4), port=str(server.port), transport_proto="udp")
-        data = {"containers": [{"awg": awg, "container": self._container}], "defaultContainer": self._container,
+        name = current(self._container)
+        data = {"containers": [{"awg": awg, "container": name}], "defaultContainer": name,
                 "description": name, "dns1": dns_list[0], "dns2": dns_list[-1], "hostName": host}
         raw = json.dumps(data).encode()
         packed = len(raw).to_bytes(4, "big") + zlib.compress(raw, 8)

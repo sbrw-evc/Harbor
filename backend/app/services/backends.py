@@ -8,6 +8,7 @@ from ..adapters.mikrotik_wg import COMMENT, MikrotikWireguard
 from ..domain.errors import DomainError, NotFound
 from ..domain.models import ClientBundle, NewPeer, PeerEntry, PeerRuntime
 from ..ports import VpnBackend, VpnServerGateway
+from .common import current
 from .configs import ClientConfigBuilder, qr_svg, wg_conf
 from .server import ServerConfigEditor, free_address, generate_psk
 from .settings import SettingsService
@@ -19,15 +20,18 @@ class AmneziaBackend(VpnBackend):
     alert_key = "server.unreachable"
 
     def __init__(self, editor: ServerConfigEditor, gateway: VpnServerGateway, builder: ClientConfigBuilder,
-                 settings: SettingsService, default_host: str):
+                 settings: SettingsService, default_host):
         self._editor = editor
         self._gw = gateway
         self._builder = builder
         self._settings = settings
         self._default_host = default_host
 
+    async def configured(self) -> bool:
+        return bool(current(self._default_host))
+
     async def ready(self) -> bool:
-        return True
+        return await self.configured()
 
     async def runtime(self) -> dict[str, PeerRuntime]:
         return await self._gw.runtime()
@@ -93,7 +97,7 @@ class AmneziaBackend(VpnBackend):
         return await asyncio.to_thread(
             self._builder.build, name=name, server=server, server_public_key=await self._gw.server_public_key(),
             psk=await self._gw.preshared_key(), private_key=private_key, public_key=public_key, address=address,
-            endpoint_host=st["endpoint_host"] or self._default_host, dns=st["client_dns"])
+            endpoint_host=st["endpoint_host"] or current(self._default_host), dns=st["client_dns"])
 
 
 class MikrotikBackend(VpnBackend):
@@ -101,11 +105,15 @@ class MikrotikBackend(VpnBackend):
     title = "MikroTik (WireGuard)"
     alert_key = "server.unreachable.mikrotik"
 
-    def __init__(self, wg: MikrotikWireguard, settings: SettingsService, lock, lan_cidr: str):
+    def __init__(self, wg: MikrotikWireguard, settings: SettingsService, lock, lan_cidr, router_host=None):
         self.wg = wg
         self._lan = lan_cidr
+        self._router_host = router_host
         self._settings = settings
         self._lock = lock
+
+    async def configured(self) -> bool:
+        return self._router_host is None or bool(current(self._router_host))
 
     async def ready(self) -> bool:
         return await self.wg.interface() is not None
@@ -162,7 +170,7 @@ class MikrotikBackend(VpnBackend):
         st = await self._settings.all()
         peers = await self.wg.peers() if iface else []
         return {"configured": iface is not None, "interface": self.wg.iface, "network": str(self.wg.network),
-                "server_ip": str(self.wg.server_ip), "lan_cidr": self._lan,
+                "server_ip": str(self.wg.server_ip), "lan_cidr": current(self._lan),
                 "port": iface["listen_port"] if iface else self.wg.port,
                 "public_key": iface["public_key"] if iface else None, "running": bool(iface and iface["running"]),
                 "public_address": await self.wg.public_address(), "endpoint_host": st["mt_endpoint_host"],

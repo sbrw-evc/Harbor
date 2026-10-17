@@ -1,10 +1,13 @@
 import { motion } from "framer-motion";
 import { useQuery } from "@tanstack/react-query";
 import { Activity, AlertTriangle, ExternalLink, KeyRound, Loader2, LogIn, PlugZap } from "lucide-react";
-import { useEffect, useState } from "react";
-import { Navigate, useLocation } from "react-router-dom";
+import { useEffect, useState, type FormEvent } from "react";
+import { Navigate, useLocation, useNavigate } from "react-router-dom";
 import { api } from "@/lib/api";
+import type { PanelUser } from "@/lib/types";
 import { clearSignedOut, useAuth, wasSignedOut } from "@/store/auth";
+import { Field } from "@/components/ui/Primitives";
+import PasswordInput from "@/components/ui/PasswordInput";
 import { t, tServer } from "@/i18n";
 
 export const SPA_PROTOCOL_URL = "https://github.com/sbrw-evc/SPA-Single-point-of-authorization-/blob/main/docs/protocol.md";
@@ -38,13 +41,76 @@ export function ConnectInstructions({ error }: { error?: string | null }) {
           </div>
         </li>
         <li>
-          {t("Put the connection key (spa1.…) into SPA_CONNECTION_KEY in .env — or into the file named by SPA_CONNECTION_KEY_FILE, or the OpenBao secret spa/connection_key — and restart Network Control.")}
+          {t("Paste the connection key (spa1.…) in Settings → Sign-in of this panel.")}
         </li>
       </ol>
       <a className="inline-flex items-center gap-1.5 text-accent hover:underline" href={SPA_PROTOCOL_URL} target="_blank" rel="noreferrer">
         {t("How applications connect to SPA")} <ExternalLink size={13} />
       </a>
     </div>
+  );
+}
+
+/** The local sign-in: user name and password, then the TOTP code when it is on. */
+function LocalSignIn({ from }: { from: string }) {
+  const setUser = useAuth((s) => s.setUser);
+  const navigate = useNavigate();
+  const [form, setForm] = useState({ username: "", password: "" });
+  const [code, setCode] = useState("");
+  const [needsCode, setNeedsCode] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const done = (u: PanelUser) => {
+    clearSignedOut();
+    setUser(u);
+    navigate(u.must_change_password ? "/profile" : from, { replace: true });
+  };
+  const submit = async (e: FormEvent) => {
+    e.preventDefault();
+    setBusy(true);
+    setError(null);
+    try {
+      if (needsCode) done((await api.auth.verify2fa(code)).user);
+      else {
+        const r = await api.auth.login(form.username, form.password);
+        if (r.requires_2fa) setNeedsCode(true);
+        else if (r.user) done(r.user);
+      }
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <form className="space-y-4" onSubmit={submit}>
+      {needsCode ? (
+        <Field label={t("Code from the authenticator app")}>
+          <input className="input text-center font-mono text-xl tracking-[.4em]" autoFocus maxLength={6} inputMode="numeric"
+            autoComplete="one-time-code" value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))} />
+        </Field>
+      ) : (
+        <>
+          <Field label={t("User name")}>
+            <input className="input" autoFocus autoComplete="username" value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} />
+          </Field>
+          <Field label={t("Password")}>
+            <PasswordInput autoComplete="current-password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
+          </Field>
+        </>
+      )}
+      {error && (
+        <div role="alert" className="flex items-start gap-2 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2.5 text-sm text-red-200">
+          <AlertTriangle size={16} className="mt-0.5 shrink-0" /> {error}
+        </div>
+      )}
+      <button className="btn-primary w-full py-2.5" disabled={busy || (needsCode ? code.length < 6 : !form.username || !form.password)}>
+        {busy ? <Loader2 size={16} className="animate-spin" /> : <LogIn size={16} />} {needsCode ? t("Confirm") : t("Sign in")}
+      </button>
+      {needsCode && <button type="button" className="btn-ghost w-full" onClick={() => { setNeedsCode(false); setCode(""); }}>{t("Back")}</button>}
+    </form>
   );
 }
 
@@ -58,8 +124,9 @@ export default function LoginPage() {
   const config = useQuery({ queryKey: ["auth-config"], queryFn: () => api.auth.config(), retry: 1, refetchOnWindowFocus: false });
   const [signedOut] = useState(wasSignedOut);
   const [going, setGoing] = useState(false);
+  const local = config.data?.mode === "local";
   const connected = !!config.data?.connected;
-  const auto = ready && !user && connected && !error && !signedOut;
+  const auto = ready && !user && !local && connected && !error && !signedOut;
 
   const go = (again = false) => {
     clearSignedOut();
@@ -77,7 +144,7 @@ export default function LoginPage() {
   if (ready && user) return <Navigate to={from} replace />;
 
   const failure = error && error !== "not_connected" ? errorText(error, description) : null;
-  const notConnected = config.isSuccess && !connected;
+  const notConnected = config.isSuccess && !local && !connected;
 
   return (
     <div className="relative flex min-h-screen items-center justify-center overflow-hidden p-4">
@@ -107,6 +174,11 @@ export default function LoginPage() {
           <div className="space-y-4">
             <div className="flex items-start gap-2 text-sm text-red-300"><AlertTriangle size={16} className="mt-0.5 shrink-0" /> {t("Network Control is not available. Try again in a minute.")}</div>
             <button className="btn-ghost w-full" onClick={() => config.refetch()}>{t("Try again")}</button>
+          </div>
+        ) : local ? (
+          <div className="space-y-4">
+            {signedOut && <p className="text-sm text-slate-400">{t("You have signed out.")}</p>}
+            <LocalSignIn from={from} />
           </div>
         ) : notConnected ? (
           <div className="space-y-4">

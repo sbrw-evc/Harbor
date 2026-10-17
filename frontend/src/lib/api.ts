@@ -2,7 +2,7 @@ import type {
   Alert, ApiTokenInfo, AuditItem, BackupItem, CustomPrefix, FlowField, FlowOverview, FlowQuery, FlowRecord, FlowResult,
   FlowStatus, RouteCheck, SavedFilter, ClientBundle, GeoData, HeatCell, LivePoint, PanelUser, Range, RouterStatus, SeriesPoint,
   MikrotikVpnInfo, ServerInfo, ServerKind, Session, Settings, SiteListSummary, Summary, TopRow, VpnClient, VpnServer,
-  AuthConfig, SpaStatus,
+  AuthConfig, AuthMode, ImportReport, InfraInfo, Role, SetupStage, SetupState, SpaStatus, StorageCheck, StorageInput,
   DeviceAction, DevicePlatform, DiscoveryResult, FlowExporter, FlowRule, FlowRuleKind, NetworkDevice, NetworkEndpoint,
   SavedView, ThreatInfo, Topology, Onboarding,
 } from "./types";
@@ -29,8 +29,8 @@ export class HttpClient {
     return this.base + path + (qs ? `?${qs}` : "");
   }
 
-  async request<T>(method: string, path: string, opts: { body?: unknown; query?: Query; form?: FormData; silent401?: boolean } = {}): Promise<T> {
-    const headers: Record<string, string> = { "X-Requested-With": "network-control" };
+  async request<T>(method: string, path: string, opts: { body?: unknown; query?: Query; form?: FormData; silent401?: boolean; headers?: Record<string, string> } = {}): Promise<T> {
+    const headers: Record<string, string> = { "X-Requested-With": "network-control", ...opts.headers };
     let body: BodyInit | undefined;
     if (opts.form) body = opts.form;
     else if (opts.body !== undefined) {
@@ -59,9 +59,37 @@ abstract class Resource {
   constructor(protected readonly http: HttpClient) {}
 }
 
-/** Sign-in goes through SPA (Single Point of Authorization); the application keeps only its own sessions. */
+/** The setup wizard: every step but the state carries the one-time setup code from the log of the backend. */
+export class SetupApi extends Resource {
+  state() { return this.http.request<SetupState>("GET", "/api/setup", { silent401: true }); }
+  private call<T>(method: string, path: string, code: string, body?: unknown) {
+    return this.http.request<T>(method, path, { body, headers: { "X-Setup-Code": code }, silent401: true });
+  }
+  verify(code: string) { return this.call<{ ok: boolean; stage: SetupStage }>("POST", "/api/setup/verify", code, {}); }
+  checkStorage(code: string, s: StorageInput) { return this.call<StorageCheck>("POST", "/api/setup/storage/check", code, s); }
+  storage(code: string, s: StorageInput) {
+    return this.call<{ stage: SetupStage; openbao: { root_token: string; recovery_key: string } | null }>("POST", "/api/setup/storage", code, s);
+  }
+  account(code: string, body: { mode: AuthMode; public_base_url?: string; username?: string; display_name?: string; email?: string; password?: string; key?: string }) {
+    return this.call<{ stage: SetupStage; user?: PanelUser; redirect: string }>("POST", "/api/setup/account", code, body);
+  }
+  keystone(code: string, base: string) {
+    return this.http.request<{ redirect_uri: string; post_logout_uri: string; roles: string[] }>("GET", "/api/setup/keystone",
+      { query: { base }, headers: { "X-Setup-Code": code }, silent401: true });
+  }
+}
+
+/** Sign-in: local users (password and TOTP) or Keystone / SPA; the application keeps only its own sessions. */
 export class AuthApi extends Resource {
   config() { return this.http.request<AuthConfig>("GET", "/api/auth/config", { silent401: true }); }
+  login(username: string, password: string) {
+    return this.http.request<{ requires_2fa: boolean; user: PanelUser | null }>("POST", "/api/auth/login", { body: { username, password }, silent401: true });
+  }
+  verify2fa(code: string) { return this.http.request<{ user: PanelUser }>("POST", "/api/auth/2fa", { body: { code }, silent401: true }); }
+  changePassword(current: string, next: string) { return this.http.post("/api/auth/password", { current, new: next }); }
+  totpSetup() { return this.http.post<{ secret: string; uri: string; qr_svg: string }>("/api/auth/totp/setup"); }
+  totpEnable(code: string) { return this.http.post("/api/auth/totp/enable", { code }); }
+  totpDisable() { return this.http.post("/api/auth/totp/disable"); }
   /** The address that starts the sign-in at SPA and comes back to `returnTo`. */
   startUrl(returnTo = "/", opts: { prompt?: "login" } = {}) {
     const q = new URLSearchParams({ return: returnTo, ...(opts.prompt ? { prompt: opts.prompt } : {}) });
@@ -126,12 +154,27 @@ export class OpsApi extends Resource {
   }
   settings() { return this.http.get<Settings>("/api/settings"); }
   saveSettings(s: Settings) { return this.http.put<Settings>("/api/settings", s); }
+  infra() { return this.http.get<InfraInfo>("/api/infra"); }
+  checkInfra(target: "router" | "vps") { return this.http.post<{ ok: boolean; detail: string }>("/api/infra/check", { target }); }
+  gatewayClient() { return this.http.post<{ ok: boolean; client_id: string }>("/api/gateway/client"); }
 }
+
+export interface UserInput { username: string; display_name?: string; email?: string; role: Role; password: string }
 
 export class UsersApi extends Resource {
   list() { return this.http.get<PanelUser[]>("/api/users"); }
+  create(d: UserInput) { return this.http.post<PanelUser>("/api/users", d); }
+  update(id: number, d: { display_name?: string; email?: string; role?: Role; is_active?: boolean }) { return this.http.patch<PanelUser>(`/api/users/${id}`, d); }
+  resetPassword(id: number, password: string) { return this.http.post(`/api/users/${id}/password`, { password }); }
+  disableTotp(id: number) { return this.http.post(`/api/users/${id}/totp/disable`); }
+  remove(id: number) { return this.http.delete(`/api/users/${id}`); }
   spa() { return this.http.get<SpaStatus>("/api/spa"); }
   sync() { return this.http.post<{ connected: boolean; created?: number; updated?: number; disabled?: number; unchanged?: boolean }>("/api/spa/sync"); }
+  setKey(key: string) { return this.http.put<{ issuer: string; application: string | null; user_import: boolean }>("/api/spa/key", { key }); }
+  removeKey() { return this.http.delete("/api/spa/key"); }
+  importLocal() { return this.http.post<ImportReport>("/api/spa/import"); }
+  switchToKeystone(purgeLocal: boolean) { return this.http.post<{ purged_local: number }>("/api/spa/switch", { purge_local: purgeLocal }); }
+  switchToLocal() { return this.http.post("/api/auth/local"); }
 }
 
 export class AdminApi extends Resource {
@@ -205,6 +248,7 @@ export class OnboardingApi extends Resource {
 
 export class ApiClient {
   readonly http = new HttpClient();
+  readonly setup = new SetupApi(this.http);
   readonly auth = new AuthApi(this.http);
   readonly clients = new ClientsApi(this.http);
   readonly analytics = new AnalyticsApi(this.http);

@@ -12,7 +12,7 @@ poll (SSE):
 | Devices behind controllers | Omada, UniFi, Meraki, CAPsMAN: APs, switches and gateways with their uplinks |
 | Discovered neighbours | LLDP / CDP neighbours that are not managed; **Add to system** prefills the form with the guessed platform |
 | Clients | online clients attached to their AP (Wi-Fi, dashed green) or switch port / router (wired); size — traffic over the last 5 minutes from the flows |
-| Internet and VPN | routers and firewalls connect to the Internet; the AmneziaWG server is connected to the router from `ROUTER_HOST` with the tunnel |
+| Internet and VPN | routers and firewalls connect to the Internet; the AmneziaWG server is connected to the router of the settings with the tunnel |
 
 ## Interaction
 

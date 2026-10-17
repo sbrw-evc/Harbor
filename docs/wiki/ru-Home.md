@@ -14,7 +14,7 @@ UniFi, Keenetic, OpenWrt, OPNsense, pfSense, Cisco, HP / Aruba, Dell, Zyxel, Jun
 | [[Архитектура|ru-Architecture]] | Компоненты, потоки данных, многопроцессность, хранение данных |
 | [[Установка|ru-Installation]] | Установка шлюза, панели и первичная настройка |
 | [[Настройка MikroTik|ru-MikroTik]] | Policy routing, резервный маршрут, NetFlow, откат |
-| [[Конфигурация|ru-Configuration]] | Переменные `.env` и настройки в панели |
+| [[Конфигурация|ru-Configuration]] | Мастер настройки, параметры, режимы входа |
 | [[Клиенты VPN|ru-Clients]] | Жизненный цикл клиентов VPN, квоты, сроки, выдача конфигов |
 | [[VPN на MikroTik|ru-MikroTik-VPN]] | WireGuard-сервер на MikroTik: настройка, клиенты, конфиги |
 | [[Мониторинг и алерты|ru-Monitoring]] | Дашборд, аналитика, карта, алерты, Telegram |

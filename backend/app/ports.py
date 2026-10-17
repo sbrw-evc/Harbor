@@ -104,6 +104,10 @@ class VpnBackend(ABC):
     title: str
     alert_key: str
 
+    async def configured(self) -> bool:
+        """Whether the server is set in the settings at all (cheap: no connection)."""
+        return True
+
     @abstractmethod
     async def ready(self) -> bool: ...
 

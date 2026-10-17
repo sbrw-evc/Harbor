@@ -16,7 +16,7 @@ LDAP / Active Directory, Entra ID и другие провайдеры нахо�
   отключаются первой синхронизацией.
 - Выход завершает и локальную сессию, и сессию SPA. «Учётная запись и безопасность» в меню пользователя открывает
   страницу учётной записи в SPA.
-- Как подключить: см. [[Конфигурация|ru-Configuration]] (`SPA_CONNECTION_KEY`).
+- Как подключить: см. [[Конфигурация|ru-Configuration]] (ключ вставляется в «Настройки → SPA»).
 
 ## Роли
 
@@ -49,9 +49,10 @@ LDAP / Active Directory, Entra ID и другие провайдеры нахо�
 |---|---|
 | Приватные ключи клиентов | OpenBao `amnezia/clients/<id>` |
 | SSH-ключ к VPS и MikroTik | OpenBao `amnezia/infra/ssh` (на диск backend пишется только во временный tmpfs) |
-| Ключ подключения к SPA (необязательно) | OpenBao `amnezia/spa/connection_key` (`value`) или `SPA_CONNECTION_KEY` в `.env` |
+| Ключ подключения к Keystone (необязательно) | OpenBao `amnezia/spa/connection_key` (`value`) |
+| Локальные пароли (argon2id) и секреты TOTP | OpenBao `amnezia/local/users/<id>/password`, `…/totp`, никогда не в PostgreSQL |
 | Токен Telegram-бота | OpenBao `amnezia/notify/telegram` |
-| Пароли БД и ClickHouse | `.env` (права 600) |
+| Пароли БД и ClickHouse | OpenBao `amnezia/infra/postgres`, `amnezia/infra/clickhouse`; для встроенных сервисов также `.env` (права 600) |
 
 Backend аутентифицируется в OpenBao по AppRole с политикой, ограниченной `amnezia/*` и чтением raft-снапшота.
 OpenBao, PostgreSQL и ClickHouse не публикуют портов наружу.

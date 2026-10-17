@@ -51,6 +51,9 @@ SYNC_SECONDS = 300
 KEY_RELOAD_SECONDS = 60
 SCOPES = ["openid", "profile", "email", "groups", "roles"]
 SPA_ACTOR = Actor("spa", "system")
+# How people sign in (setting auth_mode).
+MODE_LOCAL = "local"
+MODE_KEYSTONE = "keystone"
 # Before SPA, the TOTP secrets of local users were kept in OpenBao at users/<id>/totp.
 LEGACY_TOTP = "users/{}/totp"
 
@@ -214,6 +217,119 @@ class SpaService:
             raise NotConnected()
         return conn, self._provider
 
+    async def active(self) -> bool:
+        """Whether people sign in through Keystone (auth_mode "keystone"); in the local mode the connection may exist
+        (to move the users) but is not used for sign-in or synchronisation."""
+        return await self._settings.get("auth_mode") == MODE_KEYSTONE
+
+    async def set_key(self, raw: str, actor: Actor) -> dict:
+        """Saves a connection key entered in the panel (OpenBao spa/connection_key) and checks it against Keystone."""
+        conn = parse_key(raw, "openbao")
+        if self._key.strip() or self._key_file:
+            raise DomainError("The connection key is set in the environment (SPA_CONNECTION_KEY): remove it there first")
+        _, cfg, _ = await self._api(conn, "GET", "config")
+        await self._secrets.put(SECRET_PATH, {"value": raw.strip()})
+        self._conn_loaded = 0.0
+        await self.connection()
+        async with self._db.session() as s:
+            self._audit.record(s, actor, "spa.key_set", "spa", "", conn.issuer, client_id=conn.client_id)
+        app = (cfg or {}).get("application") or {} if isinstance(cfg, dict) else {}
+        return {"issuer": conn.issuer, "application": app.get("name"),
+                "user_import": bool((cfg or {}).get("user_import")) if isinstance(cfg, dict) else False}
+
+    async def remove_key(self, actor: Actor) -> None:
+        if await self.active():
+            raise DomainError("Switch the sign-in to local users first")
+        await self._secrets.delete(SECRET_PATH)
+        self._conn_loaded = 0.0
+        await self.connection()
+        async with self._db.session() as s:
+            self._audit.record(s, actor, "spa.key_removed", "spa", "", "")
+
+    # Moving from local users to Keystone -----------------------------------------------------------------------
+
+    async def import_local_users(self, auth: AuthService, actor: Actor) -> dict:
+        """Sends the active local users with their argon2id password hashes and roles to Keystone
+        (POST /api/spa/v1/users/import, open only while a Keystone administrator allows it for this application).
+        TOTP is not moved. Returns Keystone's report: imported, conflicts, rejected."""
+        conn, _ = await self._require()
+        _, cfg, _ = await self._api(conn, "GET", "config")
+        if not (isinstance(cfg, dict) and cfg.get("user_import")):
+            raise DomainError("Keystone does not accept users from this application now: in Keystone open the "
+                              "application and allow moving users, then try again")
+        await self.publish_roles(force=True)
+        async with self._db.session() as s:
+            people = [u for u in await UserRepo(s).all(order_by=PanelUser.id) if u.source == "local" and u.is_active]
+        entries = []
+        for u in people:
+            entries.append({"username": u.username, "name": u.display_name, "email": u.email, "role": u.role.value,
+                            "password_hash": await auth.password_hash(u.id)})
+        if not entries:
+            raise DomainError("There are no active local users to move")
+        try:
+            async with httpx.AsyncClient(timeout=60, transport=self._transport) as h:
+                r = await h.post(f"{conn.issuer}/api/spa/v1/users/import", json={"users": entries},
+                                 headers={"authorization": f"Bearer {conn.token}", "accept": "application/json"})
+        except httpx.HTTPError as e:
+            raise ExternalServiceError(f"SPA is not available: {e}") from e
+        if r.status_code == 403:
+            raise DomainError("Keystone closed the import: allow moving users for this application again")
+        if r.status_code == 404:
+            raise DomainError("This Keystone cannot import users yet: update Keystone, or give people roles in it by hand")
+        if r.status_code >= 400:
+            raise ExternalServiceError(f"SPA: users/import: HTTP {r.status_code}")
+        report = r.json()
+        result = {k: list(report.get(k) or []) for k in ("imported", "conflicts", "rejected")}
+        await self._save_state(last_import={"at": utcnow().isoformat(), **{k: len(v) for k, v in result.items()}})
+        async with self._db.session() as s:
+            self._audit.record(s, actor, "spa.users_imported", "spa", "", conn.issuer,
+                               **{k: len(v) for k, v in result.items()})
+        return result
+
+    async def switch_to_keystone(self, auth: AuthService, actor: Actor, purge_local: bool) -> dict:
+        """Makes Keystone the way to sign in. Refused unless Keystone gives someone the administrator role here, so
+        nobody is locked out. The synchronisation that follows binds local records by user name and disables the
+        rest; with ``purge_local`` the local passwords and TOTP secrets of the bound users are deleted from OpenBao."""
+        conn, _ = await self._require()
+        status, data, _ = await self._api(conn, "GET", "users")
+        entries = (data or {}).get("users") if isinstance(data, dict) else None
+        admins = [e for e in entries or [] if isinstance(e, dict) and not e.get("disabled")
+                  and role_of(oidc.strings(e.get("roles"))) == Role.ADMIN]
+        if not admins:
+            raise DomainError("Nobody has the administrator role of this application in Keystone: give it to "
+                              "yourself there first, or you would be locked out")
+        await self._settings.update({"auth_mode": MODE_KEYSTONE}, internal=True)
+        result = await self.sync(force=True, actor=actor)
+        purged = 0
+        if purge_local:
+            async with self._db.session() as s:
+                bound = [u.id for u in await UserRepo(s).all() if u.source == "spa"]
+            for user_id in bound:
+                await auth.forget(user_id)
+                purged += 1
+        async with self._db.session() as s:
+            self._audit.record(s, actor, "auth.mode_changed", "settings", "", MODE_KEYSTONE, purged_local=purged)
+        return {**result, "purged_local": purged}
+
+    async def switch_to_local(self, actor: Actor) -> None:
+        """Back to local users (e.g. Keystone is gone). Only people who still have a local password can sign in."""
+        async with self._db.session() as s:
+            users = await UserRepo(s).all()
+        has_admin = False
+        for u in users:
+            if u.role == Role.ADMIN and await self._auth.password_hash(u.id):
+                has_admin = True
+                break
+        if not has_admin:
+            raise DomainError("No administrator has a local password: create one first (python -m app.cli "
+                              "create-admin) or you would be locked out")
+        await self._settings.update({"auth_mode": MODE_LOCAL}, internal=True)
+        async with self._db.session() as s:
+            for u in await UserRepo(s).all():
+                if await self._auth.password_hash(u.id):
+                    u.source, u.is_active = "local", True
+            self._audit.record(s, actor, "auth.mode_changed", "settings", "", MODE_LOCAL)
+
     def redirect_uri(self, request_base: str) -> str:
         return (self.public_url or request_base.rstrip("/")) + CALLBACK_PATH
 
@@ -226,6 +342,8 @@ class SpaService:
     async def start(self, request_base: str, return_path: str | None, *, login_hint: str = "", idp_hint: str = "",
                     prompt: str = "") -> tuple[str, str]:
         """The address of SPA's authorization endpoint and the PKCE verifier for the short-lived cookie."""
+        if not await self.active():
+            raise NotConnected()
         conn, provider = await self._require()
         r = oidc.Request()
         state = await self.signer.sign({"n": r.nonce, "r": safe_return(return_path), "v": _fingerprint(r.verifier),
@@ -251,6 +369,8 @@ class SpaService:
                      user_agent: str) -> tuple[str, str]:
         """Checks the state against the verifier cookie, redeems the code, verifies the ID token and starts a session.
         Returns the session token and the path to go back to."""
+        if not await self.active():
+            raise NotConnected()
         conn, provider = await self._require()
         try:
             st = await self.signer.open(state)
@@ -400,7 +520,10 @@ class SpaService:
 
     async def sync(self, force: bool = False, actor: Actor | None = None) -> dict:
         """Reads the users of the application from SPA (with the ETag unless forced), creates, updates and disables
-        the local records, and revokes the sessions and API tokens of the people SPA disabled or no longer lists."""
+        the local records, and revokes the sessions and API tokens of the people SPA disabled or no longer lists.
+        Nothing happens in the local mode: it would disable the local users."""
+        if not await self.active():
+            return {"connected": False, "mode": MODE_LOCAL}
         conn = await self.connection()
         if conn is None:
             await self._save_state(connected=False, error=self._conn_error or None)
@@ -491,15 +614,25 @@ class SpaService:
     async def public_config(self) -> dict:
         conn = await self.connection()
         cfg = ((await self.state()).get("config") or {}) if conn else {}
-        return {"connected": conn is not None, "issuer": conn.issuer if conn else None,
+        return {"mode": await self._settings.get("auth_mode") or MODE_LOCAL,
+                "connected": conn is not None, "issuer": conn.issuer if conn else None,
                 "account_url": cfg.get("account_url"), "error": None if conn else (self._conn_error or None)}
 
     async def status(self) -> dict:
         conn = await self.connection()
         st = await self.state()
         cfg = st.get("config") or {}
+        if conn is not None and not await self.active():
+            # No synchronisation runs in the local mode: ask Keystone directly (the import window, the application).
+            try:
+                _, live, _ = await self._api(conn, "GET", "config")
+                cfg = live if isinstance(live, dict) else cfg
+            except DomainError as e:
+                st = {**st, "error": e.message}
         app = cfg.get("application") or {}
         return {
+            "mode": await self._settings.get("auth_mode") or MODE_LOCAL, "user_import": bool(cfg.get("user_import")),
+            "last_import": st.get("last_import"),
             "connected": conn is not None, "issuer": conn.issuer if conn else None,
             "client_id": conn.client_id if conn else None, "key_source": conn.source if conn else None,
             "key_error": self._conn_error or None, "application": app.get("name"), "application_type": app.get("type"),

@@ -7,7 +7,7 @@ from ..domain.models import ClientStatus
 from ..ports import GeoLocator
 from .alerts import AlertService
 from .clients import ONLINE_SECONDS
-from .common import utcnow
+from .common import current as current_value, utcnow
 from .settings import SettingsService
 
 RANGES = {
@@ -98,7 +98,7 @@ class AnalyticsService:
                    for c in clients.values() if c.lat is not None]
         for p in points:
             p["clients"] = [clients[i].name for i in p.pop("client_ids") if i in clients]
-        srv = self._geo.lookup(self._server_ip)
+        srv = self._geo.lookup(current_value(self._server_ip) or "")
         server = {"lat": srv.lat, "lon": srv.lon, "city": srv.city, "country": srv.country} if srv and srv.lat else None
         return {"points": points, "countries": countries, "current": current, "server": server,
                 "recent": [{"ts": e.ts.isoformat(), "client": clients[str(e.client_id)].name if str(e.client_id) in clients else "?",

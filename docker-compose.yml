@@ -1,5 +1,9 @@
 name: network-control
 
+# Everything is set in the setup wizard of the panel (open it in a browser after `./install.sh`): the storage, the
+# sign-in, the VPS, the router and the gateway. .env only holds the passwords of the bundled PostgreSQL and ClickHouse
+# (install.sh generates them) and, optionally, the version and the ports.
+
 services:
   awg-client:
     build: ./awg-client
@@ -8,20 +12,17 @@ services:
     network_mode: host
     cap_add: [NET_ADMIN]
     devices: ["/dev/net/tun:/dev/net/tun"]
+    # gateway.json and awg0.conf are written here by the panel.
     volumes: ["./awg-client/config:/config"]
-    environment:
-      LAN_IF: ${LAN_IF:-eth0}
-      TUNNEL_NET: ${TUNNEL_NET:-10.8.1.0/24}
-      PORT_FORWARDS: ${PORT_FORWARDS:-}
     restart: unless-stopped
 
   postgres:
-    image: postgres:16-alpine
+    image: timescale/timescaledb:2.17.2-pg16
     container_name: nc-postgres
     environment:
       POSTGRES_DB: amnezia
       POSTGRES_USER: amnezia
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env (install.sh generates it)}
     volumes: ["./data/postgres:/var/lib/postgresql/data"]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U amnezia -d amnezia"]
@@ -42,27 +43,13 @@ services:
     restart: unless-stopped
     networks: [internal]
 
-  bao-init:
-    image: openbao/openbao:${OPENBAO_VERSION:-2.6.2}
-    container_name: nc-bao-init
-    user: "0:0"
-    entrypoint: ["/bin/sh", "/bootstrap.sh"]
-    volumes:
-      - ./openbao/bootstrap.sh:/bootstrap.sh:ro
-      - ./data/bao-init:/bao/init
-      - ./data/approle:/bao/approle
-      - ${SSH_KEY_FILE:-/root/.ssh/id_ed25519}:/import/ssh_key:ro
-    depends_on: [openbao]
-    restart: "no"
-    networks: [internal]
-
   clickhouse:
     image: clickhouse/clickhouse-server:${CLICKHOUSE_VERSION:-24.8}
     container_name: nc-clickhouse
     environment:
       CLICKHOUSE_DB: flows
       CLICKHOUSE_USER: amnezia
-      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:?set CLICKHOUSE_PASSWORD in .env}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:?set CLICKHOUSE_PASSWORD in .env (install.sh generates it)}
       CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: "1"
       TZ: UTC
     volumes:
@@ -78,17 +65,11 @@ services:
     build: ./flow-collector
     image: ghcr.io/sbrw-evc/network-control-flow-collector:${NC_VERSION:-2.0.0}
     container_name: nc-flow-collector
-    environment:
-      CLICKHOUSE_URL: http://clickhouse:8123
-      CLICKHOUSE_USER: amnezia
-      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD}
-      LAN_CIDR: ${LAN_CIDR:-192.168.0.0/24},${MT_WG_NETWORK:-10.9.0.0/24}
-      GATEWAY_IP: ${GATEWAY_IP:-192.168.0.210}
-      AWG_HOST: ${AWG_HOST}
-      ROUTER_HOST: ${ROUTER_HOST:-}
-      KEEP_INTERNAL: ${KEEP_INTERNAL:-1}
     ports: ["${FLOW_PORT:-2055}:2055/udp", "${SFLOW_PORT:-6343}:6343/udp"]
-    volumes: ["./data/geoip:/data"]
+    volumes:
+      - ./data/geoip:/data
+      # collector.json (networks, addresses, ClickHouse) is written here by the panel.
+      - ./data/shared:/shared:ro
     depends_on: [clickhouse]
     restart: unless-stopped
     networks: [internal, egress]
@@ -97,18 +78,18 @@ services:
     build: ./backend
     image: ghcr.io/sbrw-evc/network-control-backend:${NC_VERSION:-2.0.0}
     container_name: nc-backend
-    env_file: .env
-    environment:
-      DATABASE_URL: postgresql+asyncpg://amnezia:${POSTGRES_PASSWORD}@postgres:5432/amnezia
-      CLICKHOUSE_URL: http://clickhouse:8123
-      CLICKHOUSE_USER: amnezia
     volumes:
-      - ./data/approle:/bao/approle:ro
+      # bootstrap.json, the AppRole of OpenBao, the setup code, known_hosts, backups, the GeoIP and OUI databases.
       - ./data/backend:/data
+      - ./awg-client/config:/gateway
+      - ./data/shared:/shared
+      # Read once to take over an installation from before the setup wizard (its .env and the AppRole of bao-init).
+      - ./.env:/legacy.env:ro
+      - ./data/approle:/bao/approle:ro
     tmpfs: ["/run/panel:mode=0700"]
     depends_on:
       postgres: { condition: service_healthy }
-      bao-init: { condition: service_completed_successfully }
+      openbao: { condition: service_started }
       clickhouse: { condition: service_started }
     restart: unless-stopped
     networks: [internal, egress]

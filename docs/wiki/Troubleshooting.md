@@ -35,23 +35,23 @@ and that `awg-client` is running. While the tunnel is down, traffic uses the fal
 
 ## No flows
 
-- `/ip traffic-flow print` — `enabled: yes`, a target pointing at `GATEWAY_IP:2055`.
+- `/ip traffic-flow print` — `enabled: yes`, a target pointing at the gateway address, port 2055.
 - `docker compose logs flow-collector` — the `goflow2 listening` line; received/written counters every 5 minutes.
 - The gateway host firewall must allow UDP 2055.
 
 ## Signing in
 
-- "This application is not connected to SPA" — set `SPA_CONNECTION_KEY` (see [[Configuration]]); a damaged key is reported on the same page.
+- "This application is not connected to SPA" — paste the connection key in Settings → SPA (see [[Configuration]]); a damaged key is reported on the same page.
 - "You have no role in Network Control" — an SPA administrator has to give you `admin`, `operator` or `viewer`.
 - Passwords, passkeys and MFA are managed in SPA (user menu → Account and security).
-- "SPA rejected the connection key" in Settings — the key was reissued in SPA: put the new one into `.env`.
+- "SPA rejected the connection key" in Settings — the key was reissued in SPA: paste the new one in Settings → SPA.
 - Old UI after an update — `Ctrl+F5` (HTML is not cached, assets are versioned).
 
 ## OpenBao
 
 ```bash
 docker exec nc-openbao bao status -address=http://127.0.0.1:8200
-docker compose logs bao-init
+docker compose logs backend | grep -i -E "openbao|setup"
 ```
 
 `Sealed: true` after a restart — check that `openbao/keys/unseal.key` exists and has the right permissions (owned by the openbao user).
@@ -73,7 +73,7 @@ Fix: terminate TCP on the VPS and send it home with BBR.
 
 1. On the VPS: `sh vps/github-proxy/install.sh` (set `PAC_PROXIES=<gateway>:3128,10.8.1.0:3128`). It enables BBR
    and starts `gh-proxy` (HTTPS CONNECT, port 443 only) listening on the tunnel address `10.8.1.0:3128`.
-2. On the gateway: `PORT_FORWARDS=3128=10.8.1.0:3128` in `.env`, then `docker compose up -d awg-client` —
+2. On the gateway: Settings → Gateway and LAN → port forwards `3128=10.8.1.0:3128` (awg-client restarts the tunnel by itself) —
    the proxy becomes available in the LAN as `<gateway>:3128`.
 3. Git: `git config --global http.https://github.com/.proxy http://<gateway>:3128`.
 4. Browser: system proxy setting "Use setup script" — `http://<gateway>:3128/proxy.pac` (GitHub domains only,
