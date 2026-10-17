@@ -90,7 +90,8 @@ def test_setup_code(tmp_path):
 # OpenBao of the compose file ----------------------------------------------------------------------------------------
 
 def fake_bao():
-    st = {"initialized": False, "mounts": {}, "auths": {}, "policies": {}, "roles": {}, "calls": []}
+    st = {"initialized": False, "mounts": {}, "auths": {}, "policies": {}, "roles": {}, "calls": [], "standby": 0,
+          "fail_mount": 0}
 
     def handler(request: httpx.Request) -> httpx.Response:
         p, m = request.url.path, request.method
@@ -102,11 +103,19 @@ def fake_bao():
             return httpx.Response(200, json={"root_token": "root-1", "recovery_keys_b64": ["rec-1"]})
         if p == "/v1/sys/seal-status":
             return httpx.Response(200, json={"sealed": False, "initialized": st["initialized"]})
+        if p == "/v1/sys/health":  # raft takes a moment to become active after the unseal
+            if st["standby"]:
+                st["standby"] -= 1
+                return httpx.Response(429, json={"standby": True})
+            return httpx.Response(200, json={"initialized": True, "sealed": False})
         if request.headers.get("x-vault-token") != "root-1":
             return httpx.Response(403, json={"errors": ["permission denied"]})
         if p == "/v1/sys/mounts" and m == "GET":
             return httpx.Response(200, json={"data": st["mounts"]})
         if p.startswith("/v1/sys/mounts/"):
+            if st["fail_mount"]:
+                st["fail_mount"] -= 1
+                return httpx.Response(500, json={"errors": ["local node not active"]})
             st["mounts"][p.rsplit("/", 1)[1] + "/"] = json.loads(request.content)
             return httpx.Response(204)
         if p == "/v1/sys/auth" and m == "GET":
@@ -131,17 +140,28 @@ def fake_bao():
 def test_bao_initializer(tmp_path):
     st, transport = fake_bao()
 
+    def init():
+        return BaoInitializer("http://bao", tmp_path / "approle", transport, wait=0)
+
     async def scenario():
-        shown = await BaoInitializer("http://bao", tmp_path / "approle", transport).run()
+        # A step fails after the initialisation: the root token is kept for the retry, not lost.
+        st["standby"], st["fail_mount"] = 2, 1
+        with pytest.raises(DomainError):
+            await init().run()
+        pending = tmp_path / "openbao-init.json"
+        assert st["initialized"] and stat.S_IMODE(os.stat(pending).st_mode) == 0o600
+        shown = await init().run()
         assert shown == {"root_token": "root-1", "recovery_key": "rec-1"}
         assert st["mounts"]["amnezia/"]["options"] == {"version": "2"} and "approle/" in st["auths"]
         assert 'path "amnezia/data/*"' in st["policies"]["amnezia-backend"]
         assert (tmp_path / "approle" / "role_id").read_text().strip() == "role-1"
         assert stat.S_IMODE(os.stat(tmp_path / "approle" / "secret_id").st_mode) == 0o600
-        # Initialised already: the root token is needed, and nothing is shown again.
+        # The end of the wizard deletes the kept token; then it has to be entered.
+        SetupGate(str(tmp_path)).finish()
+        assert not pending.exists()
         with pytest.raises(DomainError, match="root token"):
-            await BaoInitializer("http://bao", tmp_path / "approle", transport).run()
-        assert await BaoInitializer("http://bao", tmp_path / "approle", transport).run("root-1") == {}
+            await init().run()
+        assert await init().run("root-1") == {}
 
     asyncio.run(scenario())
 

@@ -125,10 +125,12 @@ class SetupGate:
             raise Forbidden("Wrong setup code: it is in the log of the backend container (docker compose logs backend)")
 
     def finish(self) -> None:
-        try:
-            self._path.unlink()
-        except OSError:
-            pass
+        """The wizard is done: the setup code and the OpenBao root token kept for retries go away."""
+        for path in (self._path, self._path.parent / "openbao-init.json"):
+            try:
+                path.unlink()
+            except OSError:
+                pass
 
 
 class Bootstrap:
@@ -242,12 +244,25 @@ async def approle_login(addr: str, role_id: str, secret_id: str, mount: str) -> 
 class BaoInitializer:
     """Sets up the OpenBao of the compose file through its HTTP API, as openbao/bootstrap.sh did: initialisation (the
     static seal unseals it), the KV v2 mount, AppRole with the backend policy and role. The root token and the
-    recovery key are returned once and kept nowhere."""
+    recovery key are shown once. Until the wizard is done they wait in <data>/openbao-init.json (0600), so that a step
+    failing after the initialisation can be repeated without them; the wizard deletes the file at its end."""
 
-    def __init__(self, addr: str, approle_dir: Path, transport: httpx.AsyncBaseTransport | None = None):
+    def __init__(self, addr: str, approle_dir: Path, transport: httpx.AsyncBaseTransport | None = None,
+                 pending: Path | None = None, wait: float = 1.0):
         self._addr = addr
         self._dir = approle_dir
         self._transport = transport
+        self._pending = pending or approle_dir.parent / "openbao-init.json"
+        self._wait = wait
+
+    async def _active(self, h: httpx.AsyncClient) -> None:
+        """Waits until the node is unsealed and active (raft elects itself a moment after the unseal)."""
+        for _ in range(60):
+            r = await h.get("/v1/sys/health")
+            if r.status_code == 200:
+                return
+            await asyncio.sleep(self._wait)
+        raise DomainError("OpenBao does not become active: check openbao/keys/unseal.key and its log")
 
     async def run(self, root_token: str | None = None) -> dict:
         async with httpx.AsyncClient(base_url=self._addr, timeout=30, transport=self._transport) as h:
@@ -261,15 +276,14 @@ class BaoInitializer:
                 root_token = init["root_token"]
                 shown = {"root_token": root_token,
                          "recovery_key": (init.get("recovery_keys_b64") or init.get("keys_base64") or [""])[0]}
+                _write_private(self._pending, json.dumps(shown))
+            elif not root_token and self._pending.exists():
+                shown = json.loads(self._pending.read_text())  # the first attempt failed after the initialisation
+                root_token = shown["root_token"]
             elif not root_token:
                 raise DomainError("OpenBao is initialised already: enter its root token (shown when it was "
                                   "initialised; for an old installation in data/bao-init/init.json)")
-            for _ in range(30):
-                if not (await h.get("/v1/sys/seal-status")).json().get("sealed", True):
-                    break
-                await asyncio.sleep(1)
-            else:
-                raise DomainError("OpenBao stays sealed: check openbao/keys/unseal.key")
+            await self._active(h)
             t = {"X-Vault-Token": root_token}
 
             async def call(method: str, path: str, ok=(200, 204), **kw):
