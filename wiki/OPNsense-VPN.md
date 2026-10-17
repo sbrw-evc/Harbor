@@ -1,6 +1,6 @@
 # VPN on OPNsense
 
-**English** · [Русский](ru-OPNsense-VPN)
+**English** · [Русский](ru-OPNsense-VPN.md)
 
 The third VPN server of the panel, next to Amnezia on the VPS and WireGuard on MikroTik: a WireGuard instance on an
 OPNsense firewall (24.1 or newer, the WireGuard plugin is part of the core). The panel manages the peers of one

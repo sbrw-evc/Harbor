@@ -1,6 +1,6 @@
 # Harbor
 
-**English** · [Русский](ru-Home)
+**English** · [Русский](ru-Home.md)
 
 **Harbor** manages a home or corporate network: devices of 25+ platforms (MikroTik, TP-Link / Omada, UniFi,
 Keenetic, OpenWrt, OPNsense, pfSense, Cisco, HP / Aruba, Dell, Zyxel, Juniper, Huawei, FortiGate, Eltex, SNMP), a live
@@ -11,23 +11,23 @@ self-hosted AmneziaWG VPN and selective routing (sites from a list go through th
 
 | Page | About |
 |---|---|
-| [Architecture](Architecture) | Components, data flow, multi-process mode, data storage |
-| [Installation](Installation) | Installing the gateway and the panel, initial setup |
-| [MikroTik](MikroTik) | Policy routing, fallback route, NetFlow, rollback |
-| [Configuration](Configuration) | The setup wizard, settings, sign-in modes |
-| [Clients](Clients) | VPN client lifecycle, quotas, expiry, config delivery |
-| [MikroTik-VPN](MikroTik-VPN) | WireGuard server on MikroTik: setup, clients, configs |
-| [OPNsense-VPN](OPNsense-VPN) | WireGuard instance on OPNsense: API key, clients, configs |
-| [Monitoring](Monitoring) | Dashboard, analytics, map, alerts, notifications, Telegram |
-| [Devices](Devices) | Supported platforms, adding devices, polling, settings from the panel, network clients |
-| [Network-Map](Network-Map) | The live network map |
-| [Flows](Flows) | Flow analytics: exporters, dimensions, filter language, aggregates, detection rules, threats |
-| [Routing](Routing) | Site list, custom prefixes, route check |
-| [Security](Security) | Sign-in through SPA, roles, sessions, API tokens, OpenBao, audit |
-| [Backups](Backups) | Backup and restore |
-| [API](API) | REST API, token authentication, SSE |
-| [Troubleshooting](Troubleshooting) | Diagnostics and common issues |
-| [Development](Development) | Code structure, principles, local run |
+| [Architecture](Architecture.md) | Components, data flow, multi-process mode, data storage |
+| [Installation](Installation.md) | Installing the gateway and the panel, initial setup |
+| [MikroTik](MikroTik.md) | Policy routing, fallback route, NetFlow, rollback |
+| [Configuration](Configuration.md) | The setup wizard, settings, sign-in modes |
+| [Clients](Clients.md) | VPN client lifecycle, quotas, expiry, config delivery |
+| [MikroTik-VPN](MikroTik-VPN.md) | WireGuard server on MikroTik: setup, clients, configs |
+| [OPNsense-VPN](OPNsense-VPN.md) | WireGuard instance on OPNsense: API key, clients, configs |
+| [Monitoring](Monitoring.md) | Dashboard, analytics, map, alerts, notifications, Telegram |
+| [Devices](Devices.md) | Supported platforms, adding devices, polling, settings from the panel, network clients |
+| [Network-Map](Network-Map.md) | The live network map |
+| [Flows](Flows.md) | Flow analytics: exporters, dimensions, filter language, aggregates, detection rules, threats |
+| [Routing](Routing.md) | Site list, custom prefixes, route check |
+| [Security](Security.md) | Sign-in through SPA, roles, sessions, API tokens, OpenBao, audit |
+| [Backups](Backups.md) | Backup and restore |
+| [API](API.md) | REST API, token authentication, SSE |
+| [Troubleshooting](Troubleshooting.md) | Diagnostics and common issues |
+| [Development](Development.md) | Code structure, principles, local run |
 
 ## Overview
 

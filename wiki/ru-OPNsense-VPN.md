@@ -1,6 +1,6 @@
 # VPN на OPNsense
 
-[English](OPNsense-VPN) · **Русский**
+[English](OPNsense-VPN.md) · **Русский**
 
 Третий VPN-сервер панели рядом с Amnezia на VPS и WireGuard на MikroTik: инстанс WireGuard на межсетевом экране
 OPNsense (24.1 и новее, плагин WireGuard входит в ядро). Панель управляет пирами одного инстанса через REST API

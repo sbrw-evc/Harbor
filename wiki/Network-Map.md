@@ -1,8 +1,8 @@
 # Network map
 
-**English** · [Русский](ru-Network-Map)
+**English** · [Русский](ru-Network-Map.md)
 
-**Network map** draws the network from what the [devices](Devices) report, refreshed every 20 seconds and on every
+**Network map** draws the network from what the [devices](Devices.md) report, refreshed every 20 seconds and on every
 poll (SSE):
 
 | Element | Source |

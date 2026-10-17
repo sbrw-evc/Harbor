@@ -15,7 +15,7 @@ Harbor.
   at once. Records from before SPA are bound to SPA once by username at the first sync or sign-in (then by SPA ID
   only); the old local accounts SPA does not list are disabled by the first sync.
 - Sign-out ends the local session and SPA's session. "Account and security" in the user menu opens the SPA account page.
-- How to connect: see [Configuration](Configuration) (the key is pasted in Settings → SPA).
+- How to connect: see [Configuration](Configuration.md) (the key is pasted in Settings → SPA).
 
 ## Roles
 

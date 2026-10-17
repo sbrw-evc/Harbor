@@ -11,7 +11,7 @@
 ```
 
 Экспортёром может быть любое устройство: MikroTik Traffic Flow, Cisco Flexible NetFlow, OPNsense, OpenWrt softflowd,
-FortiGate, sFlow HPE / Aruba и другие. Действие **Экспорт потоков** на [странице устройства](ru-Devices) настраивает
+FortiGate, sFlow HPE / Aruba и другие. Действие **Экспорт потоков** на [странице устройства](ru-Devices.md) настраивает
 его.
 
 Обогащение в `flow-collector`:

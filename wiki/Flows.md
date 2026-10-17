@@ -11,7 +11,7 @@ routers, switches, firewalls ──NetFlow v5 / v9, IPFIX (UDP 2055) · sFlow v5
 ```
 
 Any device can be an exporter: MikroTik Traffic Flow, Cisco Flexible NetFlow, OPNsense, OpenWrt softflowd, FortiGate,
-HPE / Aruba sFlow and others. The **Flow export** action on the [device page](Devices) configures it.
+HPE / Aruba sFlow and others. The **Flow export** action on the [device page](Devices.md) configures it.
 
 Enrichment in `flow-collector`:
 

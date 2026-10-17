@@ -34,7 +34,7 @@ added to the router immediately and kept across subsequent list uploads.
 A domain (`example.com`, a URL is accepted too) is added to `vpn-sites` as a DNS name: MikroTik resolves it with its own DNS —
 the same one LAN devices use — and keeps dynamic entries with the current addresses according to the record TTL.
 Each name is a separate entry: `www.example.com` or `api.example.com` must be added separately.
-The panel resolves the domain over DoH once an hour only to label flows in [Flows](Flows).
+The panel resolves the domain over DoH once an hour only to label flows in [Flows](Flows.md).
 
 ## Where will the traffic go
 

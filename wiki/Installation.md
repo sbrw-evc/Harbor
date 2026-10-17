@@ -45,13 +45,13 @@ OpenBao unseal key, starts the stack and prints:
 - the **setup code** (also in `docker compose logs backend`),
 - the passwords of PostgreSQL and ClickHouse for the storage step.
 
-Open the address and go through the **setup wizard** (see [Configuration](Configuration)): the storage, then the sign-in (a local
+Open the address and go through the **setup wizard** (see [Configuration](Configuration.md)): the storage, then the sign-in (a local
 administrator or Keystone). Save the OpenBao root token and recovery key the wizard shows once.
 
 The **First steps** checklist of the overview then leads through the rest:
 
 1. **Settings → Router**: the address of the MikroTik. Add the SSH key of the panel shown in **Access and storage** to
-   the router (the ready command is there) and press **Check the router**. See [MikroTik](MikroTik).
+   the router (the ready command is there) and press **Check the router**. See [MikroTik](MikroTik.md).
 2. **Settings → Amnezia server**: the address of the VPS; add the same key to `/root/.ssh/authorized_keys` there.
 3. **Settings → Gateway and LAN**: the address of this host, then **Create the gateway client** — the panel writes
    `awg0.conf` and the tunnel starts by itself.

@@ -1,6 +1,6 @@
 # VPN on MikroTik
 
-**English** · [Русский](ru-MikroTik-VPN)
+**English** · [Русский](ru-MikroTik-VPN.md)
 
 Besides the Amnezia server on the VPS, the panel manages a WireGuard server on the home MikroTik (RouterOS 7).
 Its clients are regular panel clients: creation, blocking, quotas, access periods, traffic, the connection map,
@@ -25,7 +25,7 @@ Open **VPN on MikroTik** and press **Set up on MikroTik** (administrator). The p
 | Mangle | `amnezia: mark new wg conns to vpn-sites`, `amnezia: route wg conns via tunnel` |
 
 Existing rules are not changed; running the setup again only adds what is missing. The interface, network and port
-are set by `MT_WG_IFACE`, `MT_WG_NETWORK`, `MT_WG_PORT` (see [Configuration](Configuration)).
+are set by `MT_WG_IFACE`, `MT_WG_NETWORK`, `MT_WG_PORT` (see [Configuration](Configuration.md)).
 
 The router must have a public IP on the WAN interface (or a port forward to it). Without one, clients
 from the internet cannot connect.
@@ -35,7 +35,7 @@ from the internet cannot connect.
 | Setting | Default | Description |
 |---|---|---|
 | Connection address | public IP of the router (`/ip cloud` or the WAN address) | You can set a domain name |
-| DNS | `10.9.0.1` (router resolver) | The same DNS as LAN devices, so domain rules in [Routing](Routing) match |
+| DNS | `10.9.0.1` (router resolver) | The same DNS as LAN devices, so domain rules in [Routing](Routing.md) match |
 | AllowedIPs | `0.0.0.0/0` | "Home network only" preset: `LAN_CIDR, MT_WG_NETWORK` |
 
 Changes apply to configs downloaded afterwards; already issued configs keep the old values.
@@ -50,7 +50,7 @@ with the comment `amnezia-control: <name>`. Peers added on the router manually a
 ## Traffic
 
 The panel polls `/interface wireguard peers` with the same interval as the Amnezia server: rx/tx, last handshake,
-endpoint. Traffic of `10.9.0.0/24` clients is also visible in [Flows](Flows) — the network is added to the local networks
+endpoint. Traffic of `10.9.0.0/24` clients is also visible in [Flows](Flows.md) — the network is added to the local networks
 of the flow collector.
 
 ## Rollback

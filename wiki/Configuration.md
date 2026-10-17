@@ -45,17 +45,17 @@ the first device, flows, a VPN client, Telegram and backups.
 | Router (MikroTik) | Address, SSH user | Reached over SSH with the key of the panel |
 | Amnezia server (VPS) | Address, SSH user, container, interface, utility, config folder | Empty address — no Amnezia server |
 | Gateway and LAN | Address of the gateway, home network, LAN interface, tunnel network, port forwards | Written to `gateway.json` for awg-client and `collector.json` for the flow collector |
-| WireGuard on MikroTik | Interface, client network, port | See [MikroTik-VPN](MikroTik-VPN) |
-| WireGuard on OPNsense | Address, instance, TLS check | The API key is entered on the VPN on OPNsense page and kept in OpenBao; see [OPNsense-VPN](OPNsense-VPN) |
+| WireGuard on MikroTik | Interface, client network, port | See [MikroTik-VPN](MikroTik-VPN.md) |
+| WireGuard on OPNsense | Address, instance, TLS check | The API key is entered on the VPN on OPNsense page and kept in OpenBao; see [OPNsense-VPN](OPNsense-VPN.md) |
 | Panel | Address of the panel, address for Keystone redirects, session lifetime, cookies only over HTTPS, flow retention | |
 | Access and storage | SSH key of the panel, Check the router / VPS, Create the gateway client | The key pair is created in OpenBao (`infra/ssh`); the public key is shown with the MikroTik command |
 | Client configs | DNS for clients, server address in configs, share link lifetime | |
 | Defaults | Default quota and access period, warnings | |
 | Monitoring | Polling interval, statistics retention, gateway silence, report time zone | |
-| Notifications | Enable, minimum severity, Telegram chat id | See [Monitoring](Monitoring) |
-| Backups | Daily backup, number kept | See [Backups](Backups) |
+| Notifications | Enable, minimum severity, Telegram chat id | See [Monitoring](Monitoring.md) |
+| Backups | Daily backup, number kept | See [Backups](Backups.md) |
 | Network and devices | Client offline after, forget inactive clients after, collector address and port | |
-| Traffic analysis | Threat lists, refresh, networks never flagged, reverse DNS | See [Flows](Flows) |
+| Traffic analysis | Threat lists, refresh, networks never flagged, reverse DNS | See [Flows](Flows.md) |
 
 ### The gateway
 
