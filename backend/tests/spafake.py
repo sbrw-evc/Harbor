@@ -118,7 +118,7 @@ class FakeSpa:
         async def config(request: Request):
             if not bearer_ok(request):
                 return JSONResponse({"error": "unauthorized"}, status_code=401)
-            return {"application": {"id": CLIENT_ID, "name": "Network Control", "type": "network-control"},
+            return {"application": {"id": CLIENT_ID, "name": "Harbor", "type": "network-control"},
                     "roles": spa.published[-1]["roles"] if spa.published else [],
                     "methods": [{"id": "passkey", "title": "Passkey"}],
                     "sign_out_url": f"{ISSUER}/oauth2/logout", "account_url": f"{ISSUER}/profile",

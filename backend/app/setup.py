@@ -56,7 +56,7 @@ class SetupState:
                 return False
             self.error = None
             self._app.container = c
-            log.info("Network Control started")
+            log.info("Harbor started")
             if await self.stage() != STAGE_DONE:
                 self.gate.announce()
             return True

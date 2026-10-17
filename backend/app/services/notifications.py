@@ -34,7 +34,7 @@ class NotificationService:
     async def test(self) -> None:
         if not await self._notifier.configured():
             raise DomainError("Enter the bot token and chat ID")
-        await self._notifier.send("✅ <b>Network Control</b>: test notification")
+        await self._notifier.send("✅ <b>Harbor</b>: test notification")
 
     async def _safe_send(self, text: str) -> None:
         try:

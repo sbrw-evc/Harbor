@@ -2,7 +2,7 @@
 
 **English** · [[Русский|ru-Devices]]
 
-Network Control manages routers, switches, firewalls, access points, controllers and servers from home and corporate
+Harbor manages routers, switches, firewalls, access points, controllers and servers from home and corporate
 vendors. Each device is polled on a schedule; the panel keeps its facts, interfaces with live rates, LLDP / CDP / MNDP
 neighbours, devices behind a controller and the clients it sees. The same data builds the [[network map|Network-Map]]
 and names exporters, interfaces and LAN hosts in [[flow analytics|Flows]].

@@ -2,13 +2,13 @@
 
 ## Вход и доступ управляются в SPA
 
-Network Control не хранит паролей, парольной политики, ключей доступа и настроек каталогов. Вход — через
+Harbor не хранит паролей, парольной политики, ключей доступа и настроек каталогов. Вход — через
 **SPA — единую точку авторизации** ([репозиторий](https://github.com/sbrw-evc/SPA-Single-point-of-authorization-), [протокол](https://github.com/sbrw-evc/SPA-Single-point-of-authorization-/blob/main/docs/protocol.md)): пароли, ключи доступа, MFA,
-LDAP / Active Directory, Entra ID и другие провайдеры находятся там, и роли в Network Control назначают администраторы SPA.
+LDAP / Active Directory, Entra ID и другие провайдеры находятся там, и роли в Harbor назначают администраторы SPA.
 
 - Вход: OpenID Connect, authorization code flow с PKCE (S256), nonce и подписанным одноразовым state; verifier хранится
   10 минут в HttpOnly cookie `SameSite=Lax` на `/api/auth/spa/`. ID-токен проверяется по JWKS SPA (RS256, `iss`, `aud`,
-  `exp`, `nonce`). После возврата Network Control открывает собственную сессию.
+  `exp`, `nonce`). После возврата Harbor открывает собственную сессию.
 - Пользователи — записи, синхронизируемые из SPA каждые 5 минут (на лидере) и по кнопке **Синхронизировать сейчас**:
   создаются, обновляются (имя, e-mail, группы, роль) и отключаются. Пользователь, которого SPA отключил или больше не
   передаёт, сразу теряет все сессии и API-токены. Записи, созданные до SPA, один раз привязываются к SPA по логину при

@@ -28,7 +28,7 @@ async def lifespan(app: FastAPI):
     await st.stop()
 
 
-app = FastAPI(title="Network Control", version=VERSION, lifespan=lifespan, docs_url="/api/docs", redoc_url=None,
+app = FastAPI(title="Harbor", version=VERSION, lifespan=lifespan, docs_url="/api/docs", redoc_url=None,
               openapi_url="/api/openapi.json")
 
 

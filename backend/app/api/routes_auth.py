@@ -1,4 +1,4 @@
-"""Sign-in through SPA (Single Point of Authorization) and the sessions of Network Control."""
+"""Sign-in through SPA (Single Point of Authorization) and the sessions of Harbor."""
 from urllib.parse import urlencode
 
 from fastapi import APIRouter, Depends, Request, Response
@@ -78,7 +78,7 @@ async def spa_callback(request: Request, c: Container = Depends(container), code
 
 @router.post("/logout")
 async def logout(request: Request, response: Response, c: Container = Depends(container)):
-    """Ends the session of Network Control; the browser then goes to SPA's sign-out (`redirect`)."""
+    """Ends the session of Harbor; the browser then goes to SPA's sign-out (`redirect`)."""
     token = request.cookies.get(COOKIE)
     if token:
         await c.auth.logout(token, client_ip(request))

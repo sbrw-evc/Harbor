@@ -1,5 +1,5 @@
 """Signed, expiring values for the steps of a sign-in (the OpenID Connect state): nothing is kept in memory, so any
-replica of Network Control can finish what another started. The key is kept in OpenBao."""
+replica of Harbor can finish what another started. The key is kept in OpenBao."""
 from __future__ import annotations
 
 import base64

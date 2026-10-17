@@ -42,7 +42,7 @@ and that `awg-client` is running. While the tunnel is down, traffic uses the fal
 ## Signing in
 
 - "This application is not connected to SPA" — paste the connection key in Settings → SPA (see [[Configuration]]); a damaged key is reported on the same page.
-- "You have no role in Network Control" — an SPA administrator has to give you `admin`, `operator` or `viewer`.
+- "You have no role in Harbor" — an SPA administrator has to give you `admin`, `operator` or `viewer`.
 - Passwords, passkeys and MFA are managed in SPA (user menu → Account and security).
 - "SPA rejected the connection key" in Settings — the key was reissued in SPA: paste the new one in Settings → SPA.
 - Old UI after an update — `Ctrl+F5` (HTML is not cached, assets are versioned).

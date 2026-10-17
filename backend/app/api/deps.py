@@ -16,7 +16,7 @@ class SetupRequired(Unauthorized):
     status = 503
 
     def __init__(self):
-        super().__init__("Network Control is not set up yet: open the panel and finish the setup wizard")
+        super().__init__("Harbor is not set up yet: open the panel and finish the setup wizard")
 
 
 def container(request: Request) -> Container:

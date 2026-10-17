@@ -65,7 +65,7 @@ function ResetPassword({ user, onClose }: { user: PanelUser | null; onClose: () 
   );
 }
 
-/** People who may use Network Control: local users (managed here) or records synchronised from Keystone, and the API
+/** People who may use Harbor: local users (managed here) or records synchronised from Keystone, and the API
  * tokens. */
 export default function Users() {
   const me = useAuth((s) => s.user);
@@ -88,7 +88,7 @@ export default function Users() {
     <Page>
       <PageHeader title={t("Users and access")} icon={<UserCog size={20} />}
         subtitle={local ? t("Users of this panel: passwords and two-factor codes are kept in OpenBao.")
-          : t("People, their roles and sign-in are managed in SPA; Network Control synchronises them every 5 minutes.")}
+          : t("People, their roles and sign-in are managed in SPA; Harbor synchronises them every 5 minutes.")}
         actions={local ? <button className="btn-primary" onClick={() => setCreating(true)}><Plus size={15} /> {t("New user")}</button>
           : issuer && <a className="btn-ghost" href={issuer} target="_blank" rel="noreferrer"><ExternalLink size={15} /> {t("Manage in SPA")}</a>} />
 

@@ -1,4 +1,4 @@
-**[[Network Control|Home]]**
+**[[Harbor|Home]]**
 
 **Getting started**
 - [[Architecture]]
