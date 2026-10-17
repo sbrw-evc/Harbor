@@ -15,7 +15,7 @@ Network Control.
   at once. Records from before SPA are bound to SPA once by username at the first sync or sign-in (then by SPA ID
   only); the old local accounts SPA does not list are disabled by the first sync.
 - Sign-out ends the local session and SPA's session. "Account and security" in the user menu opens the SPA account page.
-- How to connect: see [[Configuration]] (`SPA_CONNECTION_KEY`).
+- How to connect: see [[Configuration]] (the key is pasted in Settings → SPA).
 
 ## Roles
 
@@ -47,9 +47,10 @@ to the person who issued it: it never has more rights than their current role an
 |---|---|
 | Client private keys | OpenBao `amnezia/clients/<id>` |
 | SSH key for the VPS and MikroTik | OpenBao `amnezia/infra/ssh` (the backend writes it only to a temporary tmpfs) |
-| SPA connection key (optional) | OpenBao `amnezia/spa/connection_key` (`value`), or `SPA_CONNECTION_KEY` in `.env` |
+| Keystone connection key (optional) | OpenBao `amnezia/spa/connection_key` (`value`) |
+| Local passwords (argon2id) and TOTP secrets | OpenBao `amnezia/local/users/<id>/password`, `…/totp` — never in PostgreSQL |
 | Telegram bot token | OpenBao `amnezia/notify/telegram` |
-| Database and ClickHouse passwords | `.env` (mode 600) |
+| Database and ClickHouse passwords | OpenBao `amnezia/infra/postgres`, `amnezia/infra/clickhouse`; for the bundled services also `.env` (mode 600) |
 
 The backend authenticates to OpenBao with an AppRole whose policy is limited to `amnezia/*` and reading the raft snapshot.
 OpenBao, PostgreSQL and ClickHouse do not publish any ports.

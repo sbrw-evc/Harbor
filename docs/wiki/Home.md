@@ -14,7 +14,7 @@ self-hosted AmneziaWG VPN and selective routing (sites from a list go through th
 | [[Architecture]] | Components, data flow, multi-process mode, data storage |
 | [[Installation]] | Installing the gateway and the panel, initial setup |
 | [[MikroTik]] | Policy routing, fallback route, NetFlow, rollback |
-| [[Configuration]] | `.env` variables and in-panel settings |
+| [[Configuration]] | The setup wizard, settings, sign-in modes |
 | [[Clients]] | VPN client lifecycle, quotas, expiry, config delivery |
 | [[MikroTik-VPN]] | WireGuard server on MikroTik: setup, clients, configs |
 | [[Monitoring]] | Dashboard, analytics, map, alerts, notifications, Telegram |

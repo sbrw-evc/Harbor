@@ -10,13 +10,28 @@ export interface StepText {
 /** The "First steps" checklist of the overview page, by step ID (services/onboarding.py). */
 export const CHECKLIST: Record<string, StepText> = {
   spa: {
-    title: k("Connect to SPA"),
-    text: k("First give yourself the Administrator role of Network Control in SPA: the first synchronization disables the old local admin, and without an administrator from SPA nobody can open the settings. Then connect the application in SPA (Applications → Connect an application, type Network Control) and put the connection key into SPA_CONNECTION_KEY."),
-    go: k("Open SPA settings"),
+    title: k("Set up the sign-in"),
+    text: k("Users of the panel need an administrator; with Keystone, the connection must work and somebody must have the Administrator role of Network Control there. Keystone can be connected later, with the local users moved there."),
+    go: k("Open the sign-in settings"),
+  },
+  router: {
+    title: k("Connect the router"),
+    text: k("Enter the address of the MikroTik, add the SSH key of the panel to it and check the connection: the router must answer polls."),
+    go: k("Open the infrastructure"),
+  },
+  vps: {
+    title: k("Connect the Amnezia server"),
+    text: k("Enter the address of the VPS with the AmneziaWG container and add the SSH key of the panel to it: VPN clients and selective routing work through it."),
+    go: k("Open the infrastructure"),
+  },
+  gateway: {
+    title: k("Start the gateway"),
+    text: k("Enter the address of this host and create the gateway client: the panel writes its config and the tunnel starts by itself."),
+    go: k("Open the infrastructure"),
   },
   address: {
     title: k("Set the application address"),
-    text: k("PUBLIC_BASE_URL (or SPA_PUBLIC_URL) must be the address people open, not localhost: SPA sends people back to it and config links use it."),
+    text: k("The address of the panel (Settings → Panel) must be the address people open, not localhost: Keystone sends people back to it and config links use it."),
     go: k("Check the address"),
   },
   device: {
@@ -91,7 +106,7 @@ export const GUIDES: Record<string, { intro: string; steps: Record<string, StepT
     intro: k("Finish the setup of the panel: sign-in, its address, notifications and backups."),
     steps: {
       spa: { title: k("Connect to SPA"), text: k("Give yourself the Administrator role in SPA before connecting: the first synchronization disables the old local admin. Then check that the synchronization below runs without errors."), go: k("Synchronize now") },
-      address: { title: k("Set the application address"), text: k("PUBLIC_BASE_URL (or SPA_PUBLIC_URL) in .env must be the address people open, not localhost; restart the backend after changing it.") },
+      address: { title: k("Set the application address"), text: k("The address of the panel (the Panel card of this page) must be the address people open, not localhost; it applies at once.") },
       telegram: { title: k("Turn on Telegram notifications"), text: k("Paste the bot token under Telegram bot, enter the chat id under Notifications, turn on Send notifications and save."), go: k("Show notifications") },
       backups: { title: k("Keep backups"), text: k("Leave Daily backup on and make the first backup."), go: k("Open backups") },
       policy: { title: k("Set default policies"), text: k("A default quota and access period for new VPN clients, under Default policies.") },

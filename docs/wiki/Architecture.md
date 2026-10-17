@@ -7,7 +7,7 @@
 | `nc-awg-client` | `amneziavpn/amneziawg-go` | The gateway's AmneziaWG client. `network_mode: host`. All traffic arriving on the LAN interface goes into `awg0` (table 200), with NAT and MSS clamp. The protocol version matches the Amnezia server. |
 | `nc-postgres` | `postgres:16-alpine` | Clients, traffic buckets (5 min), connections, audit, alerts, operators, sessions, API tokens, saved filters, settings. |
 | `nc-openbao` | `openbao/openbao:2.6` | Secret store (KV v2 `amnezia/`), raft storage, static auto-unseal. |
-| `nc-bao-init` | `openbao/openbao:2.6` | One-shot idempotent bootstrap: init, KV, policy, `backend` AppRole, SSH key import. |
+| (setup wizard) | — | The backend initialises OpenBao on the first start: init, KV, policy, `backend` AppRole; the panel creates its SSH key. |
 | `nc-clickhouse` | `clickhouse/clickhouse-server:24.8` | `flows` table, `site_prefixes` table and the `sites` dictionary (`ip_trie`). Memory limits for small hosts. |
 | `nc-flow-collector` | goflow2 + Python | Receives NetFlow v5/v9, IPFIX (UDP 2055) and sFlow (UDP 6343), enriches records (country, ASN, direction, route, exporter, interfaces, TCP flags) and writes them to ClickHouse in batches. |
 | `nc-backend` | Python 3.12, FastAPI | REST API, SSE, background jobs. Several uvicorn processes. |

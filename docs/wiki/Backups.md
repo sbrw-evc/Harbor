@@ -18,19 +18,19 @@ ClickHouse flows are not included — they are analytics data with a limited ret
 - Manually — **Backups → Create backup** or `docker compose exec backend python -m app.cli backup`.
 - Download — the button in the list (recorded in the audit log).
 
-Keep `openbao/keys/unseal.key`, `data/bao-init/init.json` and `.env` separately.
+Keep `openbao/keys/unseal.key`, the OpenBao root token shown by the setup wizard, `data/backend/bootstrap.json`, `data/backend/approle/` and `.env` separately.
 
 ## Restore
 
-1. Deploy the project, put back `.env`, `openbao/keys/unseal.key` and `data/bao-init/init.json`.
-2. Start `postgres`, `openbao`, `bao-init`.
+1. Deploy the project, put back `.env`, `openbao/keys/unseal.key`, `data/backend/bootstrap.json` and `data/backend/approle/`.
+2. Start `postgres` and `openbao`: `docker compose up -d postgres openbao`.
 3. Restore OpenBao:
 
    ```bash
    tar xzf network-control-*.tar.gz openbao.snap
    docker cp openbao.snap nc-openbao:/tmp/
    docker exec -e BAO_ADDR=http://127.0.0.1:8200 \
-     -e BAO_TOKEN=$(sed -n 's/.*"root_token": *"\([^"]*\)".*/\1/p' data/bao-init/init.json) \
+     -e BAO_TOKEN=<the root token shown by the setup wizard> \
      nc-openbao bao operator raft snapshot restore -force /tmp/openbao.snap
    ```
 

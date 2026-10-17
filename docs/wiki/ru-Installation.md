@@ -2,24 +2,24 @@
 
 ## Требования
 
-- Сервер Amnezia (self-hosted) с контейнером AmneziaWG (`amnezia-awg2`, протокол AmneziaWG 2.x/3.x).
-- Хост шлюза в домашней сети: LXC (Proxmox) или VM с Docker 24+ и Compose v2; 2–3 ГБ ОЗУ, 10+ ГБ диска.
-  Для LXC: unprivileged, `nesting=1`, проброс `/dev/net/tun`.
+- Хост в домашней сети для панели и шлюза: LXC-контейнер (Proxmox) или ВМ с Docker 24+ и Compose v2; 2–3 ГБ ОЗУ,
+  10+ ГБ диска. Для LXC: непривилегированный, `nesting=1`, проброшен `/dev/net/tun`.
 - MikroTik с RouterOS 7.
-- SSH-ключ на шлюзе (`/root/.ssh/id_ed25519`), добавленный на VPS (`root`) и на MikroTik (`admin`).
+- По желанию: собственный сервер Amnezia с контейнером AmneziaWG (`amnezia-awg2`, протокол AmneziaWG 2.x/3.x).
+- По желанию: Keystone (SPA) для единого входа; без него у панели свои пользователи.
 
-### LXC в Proxmox
+### LXC на Proxmox
 
 ```bash
-pct create 210 local:vztmpl/debian-13-standard_13.1-2_amd64.tar.zst --hostname network-control \
-  --cores 2 --memory 3072 --swap 1024 --rootfs local-lvm:16 \
-  --net0 name=eth0,bridge=vmbr0,gw=192.168.0.1,ip=192.168.0.210/24,type=veth \
-  --unprivileged 1 --features nesting=1 --onboot 1 --dev0 /dev/net/tun
-pct start 210
-pct exec 210 -- bash -c "apt-get update && apt-get install -y docker.io docker-compose git openssh-client"
+pct create 302 local:vztmpl/debian-13-standard_13.1-2_amd64.tar.zst --hostname network-control \
+  --cores 2 --memory 3072 --swap 1024 --rootfs local-lvm:20 \
+  --net0 name=eth0,bridge=vmbr0,gw=192.168.0.1,ip=192.168.0.102/24,type=veth \
+  --unprivileged 1 --features nesting=1,keyctl=1 --onboot 1 --dev0 /dev/net/tun
+pct start 302
+pct exec 302 -- bash -c "apt-get update && apt-get install -y curl git && curl -fsSL https://get.docker.com | sh"
 ```
 
-В контейнере включите форвардинг:
+Включите пересылку пакетов внутри контейнера (шлюз маршрутизирует туннель):
 
 ```bash
 cat >/etc/sysctl.d/99-gw.conf <<EOF
@@ -30,31 +30,35 @@ EOF
 sysctl -p /etc/sysctl.d/99-gw.conf
 ```
 
-### SSH-ключ
-
-```bash
-ssh-keygen -t ed25519 -N "" -f /root/.ssh/id_ed25519
-ssh-copy-id root@<VPS>
-```
-
-На MikroTik:
-
-```
-/file add name=gw.pub contents="ssh-ed25519 AAAA... "
-/user ssh-keys import public-key-file=gw.pub user=admin
-```
-
 ## Установка панели
 
 ```bash
-mkdir -p /opt/network-control && cd /opt/network-control
-curl -L https://github.com/sbrw-evc/Network-Control/releases/download/v1.0.0/network-control-1.0.0-deploy.tar.gz   | tar xz --strip-components=1
+git clone https://github.com/sbrw-evc/Network-Control.git /opt/network-control
+cd /opt/network-control
 ./install.sh
 ```
 
-Или клонируйте репозиторий: `git clone https://github.com/sbrw-evc/Network-Control.git /opt/network-control`.
+`install.sh` создаёт `.env` со случайными паролями встроенных PostgreSQL и ClickHouse, папки данных и ключ
+распечатывания OpenBao, запускает стек и печатает:
 
-`install.sh` скачивает готовые образы из GitHub Container Registry; версия задаётся `NC_VERSION` в `.env`:
+- адрес панели,
+- **код установки** (он же есть в `docker compose logs backend`),
+- пароли PostgreSQL и ClickHouse для шага «Хранилища».
+
+Откройте адрес и пройдите **мастер первичной настройки** (см. [[ru-Configuration]]): хранилища, затем вход (локальный
+администратор или Keystone). Сохраните root-токен и ключ восстановления OpenBao, которые мастер показывает один раз.
+
+Дальше чек-лист **«Первые шаги»** на обзоре проводит по остальному:
+
+1. **«Настройки → Роутер»**: адрес MikroTik. Добавьте на роутер SSH-ключ панели из карточки **«Доступ и хранилища»**
+   (там же готовая команда) и нажмите **«Проверить роутер»**. См. [[ru-MikroTik]].
+2. **«Настройки → Сервер Amnezia»**: адрес VPS; добавьте тот же ключ в `/root/.ssh/authorized_keys` на нём.
+3. **«Настройки → Шлюз и локальная сеть»**: адрес этого хоста, затем **«Создать клиента шлюза»**. Панель запишет
+   `awg0.conf`, и туннель поднимется сам.
+4. **«Маршрутизация → Загрузить ip-list.json»**: список сайтов применяется на роутере и загружается в ClickHouse.
+5. **«Настройки → Telegram-бот»**: по желанию подключите уведомления.
+
+Образы берутся из GitHub Container Registry, версия задаётся `NC_VERSION` в `.env`:
 
 | Образ | Платформы |
 |---|---|
@@ -63,34 +67,30 @@ curl -L https://github.com/sbrw-evc/Network-Control/releases/download/v1.0.0/net
 | `ghcr.io/sbrw-evc/network-control-flow-collector` | linux/amd64, linux/arm64 |
 | `ghcr.io/sbrw-evc/network-control-awg-client` | linux/amd64 |
 
-Первый запуск создаёт `.env` со случайными паролями. Заполните адреса (см. [[Конфигурация|ru-Configuration]]) и запустите `./install.sh` ещё раз:
-он создаст каталоги данных и ключ распечатки OpenBao, выставит права и поднимет стек.
-
-После запуска:
-
-1. Подключите панель к SPA (см. [[Конфигурация|ru-Configuration]] → Подключение к SPA), откройте `PUBLIC_BASE_URL` и войдите через SPA.
-2. **Клиенты VPN → Новый клиент** — создайте клиента для шлюза (например, `home-gateway`), скачайте `.conf`
-   и сохраните как `awg-client/config/awg0.conf`. Выполните `docker compose restart awg-client`.
-3. Импортируйте конфигурацию MikroTik — [[Настройка MikroTik|ru-MikroTik]].
-4. **Маршрутизация → Загрузить ip-list.json** — список сайтов будет применён на роутере и загружен в ClickHouse.
-5. **Настройки → Telegram-бот** — при необходимости подключите уведомления.
-
 ## Обновление
-
-Укажите новую версию в `.env` и скачайте образы:
 
 ```bash
 cd /opt/network-control
-sed -i 's/^NC_VERSION=.*/NC_VERSION=1.0.0/' .env
-docker compose pull && docker compose up -d
+git pull
+sed -i 's/^NC_VERSION=.*/NC_VERSION=2.1.0/' .env
+./install.sh
 ```
-
-При установке из репозитория `git pull && docker compose up -d --build` соберёт образы локально.
 
 Схемы PostgreSQL и ClickHouse обновляются автоматически.
 
-## Что сохранить отдельно
+### С версии до мастера первичной настройки
 
-- `openbao/keys/unseal.key` — ключ автоматической распечатки OpenBao. Без него данные OpenBao и снапшоты не восстановить.
-- `data/bao-init/init.json` — root-токен и recovery-ключ OpenBao.
+Вручную ничего делать не нужно: backend один раз перенимает установку. Он читает старый `.env` (примонтирован только
+для чтения) и файлы AppRole бывшего сервиса `bao-init`, переносит пароли и ключ подключения SPA в OpenBao, превращает
+`AWG_HOST`, `ROUTER_HOST`, `GATEWAY_IP`, `LAN_CIDR`, `PUBLIC_BASE_URL` и остальные переменные в настройки и записывает
+`data/backend/bootstrap.json`. Установка, где вход шёл через SPA, продолжит работать так же. В журнале будет список
+перенесённого; после этого в `.env` нужно оставить только пароли, версию и порты. PostgreSQL переходит на образ
+TimescaleDB с той же папкой данных.
+
+## Что хранить отдельно
+
+- `openbao/keys/unseal.key`: ключ автоматического распечатывания OpenBao. Без него данные и снимки OpenBao не
+  восстановить.
+- Root-токен и ключ восстановления OpenBao, которые показал мастер (у старых установок: `data/bao-init/init.json`).
+- `data/backend/bootstrap.json` и `data/backend/approle/`: как панель подключается к хранилищам.
 - `.env`.

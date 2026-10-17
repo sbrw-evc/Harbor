@@ -7,7 +7,7 @@
 | `nc-awg-client` | `amneziavpn/amneziawg-go` | Клиент AmneziaWG шлюза. `network_mode: host`. Весь трафик, пришедший с LAN-интерфейса, уходит в `awg0` (таблица 200), NAT и MSS clamp. Версия протокола совпадает с сервером Amnezia. |
 | `nc-postgres` | `postgres:16-alpine` | Клиенты, бакеты трафика (5 мин), подключения, аудит, алерты, операторы, сессии, API-токены, сохранённые фильтры, настройки. |
 | `nc-openbao` | `openbao/openbao:2.6` | Хранилище секретов (KV v2 `amnezia/`), raft-storage, static auto-unseal. |
-| `nc-bao-init` | `openbao/openbao:2.6` | Одноразовый идемпотентный bootstrap: init, KV, политика, AppRole `backend`, импорт SSH-ключа. |
+| (мастер настройки) | — | Backend инициализирует OpenBao при первом запуске: init, KV, политика, AppRole `backend`; панель сама создаёт SSH-ключ. |
 | `nc-clickhouse` | `clickhouse/clickhouse-server:24.8` | Таблица `flows`, таблица `site_prefixes` и словарь `sites` (`ip_trie`). Лимиты памяти для слабых хостов. |
 | `nc-flow-collector` | goflow2 + Python | Принимает NetFlow v5/v9, IPFIX (UDP 2055) и sFlow (UDP 6343), обогащает записи (страна, ASN, направление, маршрут, экспортёр, интерфейсы, TCP-флаги) и пишет их в ClickHouse пачками. |
 | `nc-backend` | Python 3.12, FastAPI | REST API, SSE, фоновые задачи. Несколько процессов uvicorn. |

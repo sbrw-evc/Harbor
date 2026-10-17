@@ -1,6 +1,8 @@
 import { lazy, Suspense, useEffect } from "react";
 import { BrowserRouter, Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { AnimatePresence } from "framer-motion";
+import { useQuery } from "@tanstack/react-query";
+import { api } from "@/lib/api";
 import { useAuth } from "@/store/auth";
 import AppLayout from "@/components/layout/AppLayout";
 import { PageLoader } from "@/components/ui/Feedback";
@@ -27,6 +29,7 @@ const Devices = lazy(() => import("@/pages/Devices"));
 const DeviceDetail = lazy(() => import("@/pages/DeviceDetail"));
 const Endpoints = lazy(() => import("@/pages/Endpoints"));
 const NetworkMap = lazy(() => import("@/pages/NetworkMap"));
+const SetupPage = lazy(() => import("@/pages/Setup"));
 
 function Guard({ role, children }: { role: Role; children: JSX.Element }) {
   const can = useAuth((s) => s.can);
@@ -70,16 +73,29 @@ function Private() {
   );
 }
 
+/** Until the setup wizard is finished every page leads to it (config links of clients excepted). */
+function SetupGate({ children }: { children: JSX.Element }) {
+  const location = useLocation();
+  const setup = useQuery({ queryKey: ["setup"], queryFn: () => api.setup.state(), retry: 2, refetchOnWindowFocus: false });
+  if (location.pathname === "/setup" || location.pathname.startsWith("/s/")) return children;
+  if (setup.isLoading) return <PageLoader full />;
+  if (setup.data && setup.data.stage !== "done") return <Navigate to="/setup" replace />;
+  return children;
+}
+
 export default function App() {
   const bootstrap = useAuth((s) => s.bootstrap);
   useEffect(() => { bootstrap(); }, [bootstrap]);
   return (
     <BrowserRouter>
-      <Routes>
-        <Route path="/login" element={<LoginPage />} />
-        <Route path="/s/:token" element={<Suspense fallback={<PageLoader full />}><SharePage /></Suspense>} />
-        <Route path="/*" element={<Private />} />
-      </Routes>
+      <SetupGate>
+        <Routes>
+          <Route path="/setup" element={<Suspense fallback={<PageLoader full />}><SetupPage /></Suspense>} />
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/s/:token" element={<Suspense fallback={<PageLoader full />}><SharePage /></Suspense>} />
+          <Route path="/*" element={<Private />} />
+        </Routes>
+      </SetupGate>
     </BrowserRouter>
   );
 }

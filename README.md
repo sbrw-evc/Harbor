@@ -84,7 +84,7 @@ The screenshots are taken from the real application with demo data: `./scripts/s
 | `backend` | REST API, SSE, device drivers, background jobs (VPN and device polling, policies, detection rules, health checks, backups) |
 | `frontend` | Web UI (React) + API proxy + OpenStreetMap tile proxy |
 | `postgres` | Clients, statistics, audit, alerts, users |
-| `openbao` / `bao-init` | Secrets (client keys, SSH key, Telegram token, optionally the SPA connection key), auto-unseal |
+| `openbao` | Secrets (passwords of local users and their TOTP, client keys, SSH key, Telegram token, database passwords, the Keystone connection key), auto-unseal; initialised by the setup wizard |
 | `clickhouse` | Network flows and aggregates; site, threat, exporter, interface and host dictionaries |
 | `flow-collector` | goflow2 (NetFlow / IPFIX UDP 2055, sFlow UDP 6343) + enrichment (country, ASN, direction, route, exporter) |
 
@@ -103,39 +103,35 @@ What each platform collects and allows to change: [Wiki → Network devices](htt
 
 ## Quick start
 
-Requirements: Docker 24+ with Compose v2, SSH key access to the Amnezia VPS and to MikroTik (RouterOS 7).
+Requirements: Docker 24+ with Compose v2 and MikroTik with RouterOS 7; optionally an Amnezia VPS and Keystone (SPA).
 
 ```bash
 git clone https://github.com/sbrw-evc/Network-Control.git /opt/network-control
 cd /opt/network-control
-./install.sh              # creates .env with random passwords
-nano .env                 # AWG_HOST, ROUTER_HOST, GATEWAY_IP, LAN_CIDR, PUBLIC_BASE_URL, SPA_CONNECTION_KEY
-./install.sh              # starts the stack
+./install.sh              # generates the passwords, starts the stack, prints the address and the setup code
 ```
 
-### Sign-in and access are managed in SPA
+Everything else is set in the panel: open the address and go through the **setup wizard** — the storage (the bundled
+PostgreSQL with TimescaleDB, ClickHouse and OpenBao are filled in; OpenBao is initialised by the wizard), then the
+sign-in. `.env` keeps only the passwords of the bundled databases, the version and the ports.
 
-Network Control has no passwords of its own: people sign in through
-[SPA — Single Point of Authorization](https://github.com/sbrw-evc/SPA-Single-point-of-authorization-) (OpenID Connect), which also decides their roles here
-(`admin`, `operator`, `viewer`) and synchronises the users every 5 minutes. To connect, in SPA open
-**Applications → Connect an application**, type `network-control`, address `PUBLIC_BASE_URL`, give people or groups
-the roles, and put the connection key `spa1.…` into `SPA_CONNECTION_KEY` in `.env` — see the
-[protocol](https://github.com/sbrw-evc/SPA-Single-point-of-authorization-/blob/main/docs/protocol.md) and [Configuration](https://github.com/sbrw-evc/Network-Control/wiki/Configuration).
+### Two ways to sign in
 
-> [!IMPORTANT]
-> **Give yourself the Administrator role in SPA before you connect.** The first synchronization disables every local
-> user SPA does not list — including the old local `admin` — and revokes their sessions and API tokens. Without an
-> administrator from SPA nobody can open the settings afterwards. An existing local user is kept (with its audit
-> history) when SPA has a person with the same user name; from then on it is bound to that SPA account.
+- **Users of Network Control** — a standalone installation: the first administrator is created in the wizard; passwords
+  (argon2id) and TOTP secrets are kept in OpenBao, never in PostgreSQL.
+- **Keystone** — [SPA / Keystone](https://github.com/sbrw-evc/SPA-Single-point-of-authorization-) (OpenID Connect)
+  signs people in and decides their roles (`admin`, `operator`, `viewer`); the panel synchronises them every 5 minutes.
+  The connection key `spa1.…` is pasted in the wizard or in **Settings → SPA** (kept in OpenBao).
 
-Moving from the panel's own sign-in (before 2.0): passwords and TOTP 2FA are gone — SPA does MFA now. The old TOTP
-secrets in OpenBao (`users/<id>/totp`) are deleted at the first successful synchronization with SPA (recorded in the
-audit log as `spa.legacy_totp_purged`); if OpenBao refuses, it is tried again at the next synchronization.
+A standalone panel can move to Keystone later: allow moving users for the application in Keystone, press **Move the
+local users** (their passwords and roles go along), then **Switch to Keystone** — refused while nobody has the `admin`
+role there, so nobody is locked out. See [Configuration](https://github.com/sbrw-evc/Network-Control/wiki/Configuration).
 
-Panel: `http://<GATEWAY_IP>:8080` → **Sign in with SPA**. Then:
+After the wizard the **First steps** checklist of the overview leads through the rest:
 
-1. Create a client for the gateway in the panel, save its config as `awg-client/config/awg0.conf`, restart `awg-client`.
-2. Import `mikrotik/network-control.rsc` on MikroTik (addresses are at the top of the file).
+1. **Settings → Router**: the address of the MikroTik; add the SSH key the panel shows and check the connection.
+2. **Settings → Amnezia server** and **Gateway and LAN**, then **Create the gateway client** — the panel writes the
+   tunnel config itself.
 3. Upload the site list in the "Routing" section.
 
 Step by step — [Installation](https://github.com/sbrw-evc/Network-Control/wiki/Installation).

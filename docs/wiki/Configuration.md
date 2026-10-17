@@ -1,82 +1,90 @@
 # Configuration
 
-## Environment variables (`.env`)
+Network Control is configured in the panel: the **setup wizard** on the first start, then the **Settings** page.
+Settings are stored in PostgreSQL and picked up by all processes within 15 seconds — no restart.
+
+## `.env`
+
+Only what the bundled containers need before the panel runs. `install.sh` creates the file with random passwords.
 
 | Variable | Default | Description |
 |---|---|---|
-| `AWG_HOST` | — | IP or hostname of the Amnezia server (VPS). Required. |
-| `AWG_SSH_USER` | `root` | SSH user on the VPS |
-| `AWG_CONTAINER` | `amnezia-awg2` | AmneziaWG Docker container on the VPS |
-| `AWG_IFACE` | `awg0` | Interface inside the container |
-| `AWG_BIN` | `awg` | CLI tool (`awg` or `wg`) |
-| `AWG_DIR` | `/opt/amnezia/awg` | Config directory inside the container |
-| `ROUTER_HOST` | `192.168.0.1` | MikroTik address |
-| `KEEP_INTERNAL` | `1` | Collector: keep flows between two local addresses (`Direction = internal`) |
-| `ROUTER_SSH_USER` | `admin` | SSH user on MikroTik |
-| `GATEWAY_IP` | `192.168.0.210` | LAN address of the gateway (the Docker host) |
-| `LAN_CIDR` | `192.168.0.0/24` | Local networks for classifying flows, comma-separated; IPv6 prefixes are allowed (`192.168.0.0/24,2001:db8:10::/64`) |
-| `LAN_IF` | `eth0` | LAN interface of the gateway host |
-| `TUNNEL_NET` | `10.8.1.0/24` | AmneziaWG tunnel network |
-| `MT_WG_IFACE` | `wg-nc` | WireGuard interface on MikroTik (see [[MikroTik-VPN]]) |
-| `MT_WG_NETWORK` | `10.9.0.0/24` | Network of MikroTik VPN clients; the first address belongs to the router |
-| `MT_WG_PORT` | `51820` | UDP port of the MikroTik WireGuard server |
-| `PORT_FORWARDS` | — | TCP ports of the gateway forwarded into the tunnel, `local=ip:port` separated by spaces, e.g. `3128=10.8.1.0:3128` for the GitHub proxy (see [[Troubleshooting]]) |
-| `SSH_KEY_FILE` | `/root/.ssh/id_ed25519` | SSH key imported into OpenBao on first start |
-| `PUBLIC_BASE_URL` | `http://localhost:8080` | Panel URL (used in config share links) |
-| `PANEL_PORT` | `8080` | Panel port |
-| `FLOW_PORT` | `2055` | UDP port for NetFlow |
-| `SFLOW_PORT` | `6343` | UDP port for sFlow |
-| `SPA_CONNECTION_KEY` | — | Connection key `spa1.…` issued by SPA (see below) |
-| `SPA_CONNECTION_KEY_FILE` | — | A file holding the connection key, instead of the variable |
-| `SPA_PUBLIC_URL` | — | Address of the panel when it differs from the request address (for the redirect address) |
-| `POSTGRES_PASSWORD` | — | PostgreSQL password |
-| `CLICKHOUSE_PASSWORD` | — | ClickHouse password |
-| `OPENBAO_VERSION` | `2.6.2` | OpenBao image version |
-| `CLICKHOUSE_VERSION` | `24.8` | ClickHouse image version |
-| `FLOWS_TTL_DAYS` | `30` | Flow retention |
-| `WEB_CONCURRENCY` | `2` | Number of API processes |
-| `SESSION_TTL_HOURS` | `12` | Session lifetime |
-| `COOKIE_SECURE` | `false` | Set to `true` when the panel is served over HTTPS |
+| `POSTGRES_PASSWORD` | — | Password of the bundled PostgreSQL (TimescaleDB). Entered in the wizard once; the panel keeps it in OpenBao |
+| `CLICKHOUSE_PASSWORD` | — | Password of the bundled ClickHouse. Entered in the wizard once; kept in OpenBao |
+| `NC_VERSION` | `2.0.0` | Version of the images |
+| `PANEL_PORT` | `8080` | Port of the panel |
+| `FLOW_PORT` / `SFLOW_PORT` | `2055` / `6343` | UDP ports of the flow collector |
+| `OPENBAO_VERSION` / `CLICKHOUSE_VERSION` | `2.6.2` / `24.8` | Image versions of the bundled services |
 
-## In-panel settings ("Settings" page)
+The backend reads nothing else from the environment. Values of an older `.env` (`AWG_HOST`, `ROUTER_HOST`,
+`DATABASE_URL`, `SPA_CONNECTION_KEY`, …) are imported **once**, when the database has none of them yet, and a warning in
+the log asks to remove them.
+
+## Setup wizard
+
+Opens by itself while Network Control is not set up. Every step asks for the **setup code**, printed by `install.sh`
+and in `docker compose logs backend` (also `data/backend/setup-code`); it disappears when the wizard is done.
+
+1. **Storage** — PostgreSQL (TimescaleDB), ClickHouse and OpenBao. The bundled services are filled in. OpenBao of the
+   compose file is initialised by the wizard: the **root token and the recovery key are shown once** — keep them in a
+   password manager. An external OpenBao is used with an AppRole (`role_id`, `secret_id`, KV v2 mount).
+   The result is `data/backend/bootstrap.json` (addresses and user names, no password) and `data/backend/approle/`
+   (the only secret on disk); passwords go to OpenBao (`infra/postgres`, `infra/clickhouse`).
+2. **Sign-in** — the address of the panel and how people sign in:
+   - **Users of Network Control** — a standalone installation: the first administrator is created here; passwords
+     (argon2id) and TOTP secrets are kept in OpenBao (`local/users/<id>`), never in PostgreSQL;
+   - **Keystone** — the connection key `spa1.…` (see below); somebody must have the `admin` role of the application.
+
+Then the **First steps** checklist of the overview leads through the rest: the router, the Amnezia server, the gateway,
+the first device, flows, a VPN client, Telegram and backups.
+
+## Settings page
 
 | Group | Setting | Description |
 |---|---|---|
-| Client configs | DNS for clients | `DNS` value in issued configs |
-| | Server address in configs | Empty — `AWG_HOST` |
-| | Share link lifetime | For one-time config links |
-| Defaults | Default quota and access period | Pre-filled in the new client form |
-| | Quota warning threshold, days before expiry | For alerts |
-| VPN on MikroTik | Connection address, DNS, AllowedIPs | Set on the "VPN on MikroTik" page, see [[MikroTik-VPN]] |
-| Monitoring | Server polling interval | 10 s by default |
-| | Statistics retention | 90 days by default |
-| | "Gateway silent" threshold | Minutes without a handshake before an alert |
-| | Report time zone | For the heatmap and messages |
+| Router (MikroTik) | Address, SSH user | Reached over SSH with the key of the panel |
+| Amnezia server (VPS) | Address, SSH user, container, interface, utility, config folder | Empty address — no Amnezia server |
+| Gateway and LAN | Address of the gateway, home network, LAN interface, tunnel network, port forwards | Written to `gateway.json` for awg-client and `collector.json` for the flow collector |
+| WireGuard on MikroTik | Interface, client network, port | See [[MikroTik-VPN]] |
+| Panel | Address of the panel, address for Keystone redirects, session lifetime, cookies only over HTTPS, flow retention | |
+| Access and storage | SSH key of the panel, Check the router / VPS, Create the gateway client | The key pair is created in OpenBao (`infra/ssh`); the public key is shown with the MikroTik command |
+| Client configs | DNS for clients, server address in configs, share link lifetime | |
+| Defaults | Default quota and access period, warnings | |
+| Monitoring | Polling interval, statistics retention, gateway silence, report time zone | |
 | Notifications | Enable, minimum severity, Telegram chat id | See [[Monitoring]] |
-| Backups | Daily backup, number of backups kept | See [[Backups]] |
-| Network and devices | Client offline after, forget inactive clients after | 15 minutes, 90 days |
-| | Collector address and port for flow export | Empty — `GATEWAY_IP`, port 2055; used by the **Flow export** action of devices |
-| Traffic analysis | Threat lists, refresh interval, networks never flagged | See [[Flows]] |
-| | Reverse DNS (PTR) of remote hosts | On by default |
+| Backups | Daily backup, number kept | See [[Backups]] |
+| Network and devices | Client offline after, forget inactive clients after, collector address and port | |
+| Traffic analysis | Threat lists, refresh, networks never flagged, reverse DNS | See [[Flows]] |
 
-Settings are stored in PostgreSQL and picked up by all processes within 15 seconds.
+### The gateway
 
-## Connecting to SPA
+**Create the gateway client** creates the AmneziaWG client `home-gateway` and writes its config to
+`awg-client/config/awg0.conf`; awg-client waits for this file and restarts the tunnel whenever it or `gateway.json`
+changes.
 
-Sign-in and access are managed in **SPA — Single Point of Authorization** ([repository](https://github.com/sbrw-evc/SPA-Single-point-of-authorization-),
-[protocol](https://github.com/sbrw-evc/SPA-Single-point-of-authorization-/blob/main/docs/protocol.md)). Without a connection the panel shows "This application is not connected to SPA".
+## Sign-in: local users and Keystone
 
-1. In SPA: **Applications → Connect an application**, type `network-control`, the address of the panel
-   (`PUBLIC_BASE_URL`). The redirect address is `<address>/api/auth/spa/callback`, the address after sign-out `<address>/`.
-2. Assign the roles `admin`, `operator`, `viewer` to people or groups. The first administrator of the panel is whoever
-   SPA gives the `admin` role. **Give it to yourself before step 3:** the first synchronization disables every local
-   user SPA does not list, the old local `admin` included (a local user whose user name SPA also has is kept and bound
-   to that SPA account), and revokes their sessions and API tokens.
-3. Put the connection key into `SPA_CONNECTION_KEY` in `.env` (or a file named by `SPA_CONNECTION_KEY_FILE`, or the
-   OpenBao secret `amnezia/spa/connection_key`, field `value` — re-read every minute) and run `docker compose up -d backend`.
+The **Users** page manages local users in the local mode: create, role, disable, reset the password, turn off TOTP,
+delete. Everyone changes the temporary password at the first sign-in and may turn on TOTP in the profile.
 
-The first successful synchronization also deletes the TOTP secrets of the old sign-in (`users/<id>/totp` in OpenBao;
-audit log: `spa.legacy_totp_purged`).
+### Connecting Keystone (SPA)
 
-The users page and **Settings** show the connection: issuer, application, last synchronisation, counts, errors and
-**Synchronize now**.
+1. In Keystone: **Applications → Connect an application**, type `network-control`, the address of the panel. The
+   redirect address is `<address>/api/auth/spa/callback`, the address after sign-out `<address>/`.
+2. Give the roles `admin`, `operator`, `viewer` to people or groups — yourself `admin` first.
+3. Paste the connection key in **Settings → SPA** (it goes to OpenBao `spa/connection_key`).
+
+### Moving local users to Keystone
+
+In the local mode, with the key saved:
+
+1. In Keystone open the application and **allow moving users** (a window that closes after one import or 24 hours).
+2. **Move the local users** — they are sent with their argon2id password hashes and roles
+   (`POST /api/spa/v1/users/import`); Keystone keeps the passwords (re-hashed at the first sign-in), reports user names
+   or e-mails that are taken. TOTP is set up again in Keystone.
+3. **Switch to Keystone** — refused while nobody has the `admin` role of the application in Keystone. The
+   synchronisation binds the local records by user name and disables the rest; optionally the local passwords and TOTP
+   secrets are deleted from OpenBao.
+
+**Back to local users** returns the sign-in to the panel (only people who still have a local password can sign in).
+When nobody can sign in at all: `docker compose exec backend python -m app.cli create-admin <name>`.
