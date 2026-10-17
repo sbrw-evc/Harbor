@@ -52,6 +52,7 @@ LDAP / Active Directory, Entra ID и другие провайдеры нахо�
 | Ключ подключения к Keystone (необязательно) | OpenBao `amnezia/spa/connection_key` (`value`) |
 | Локальные пароли (argon2id) и секреты TOTP | OpenBao `amnezia/local/users/<id>/password`, `…/totp`, никогда не в PostgreSQL |
 | Токен Telegram-бота | OpenBao `amnezia/notify/telegram` |
+| API-ключ и секрет OPNsense | OpenBao `amnezia/opnsense/api` |
 | Пароли БД и ClickHouse | OpenBao `amnezia/infra/postgres`, `amnezia/infra/clickhouse`; для встроенных сервисов также `.env` (права 600) |
 
 Backend аутентифицируется в OpenBao по AppRole с политикой, ограниченной `amnezia/*` и чтением raft-снапшота.

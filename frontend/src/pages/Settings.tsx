@@ -42,6 +42,11 @@ const INFRA_GROUPS: { title: string; anchor?: string; fields: Def[] }[] = [
     { key: "mt_wg_network", label: k("Client network"), type: "text" },
     { key: "mt_wg_port", label: k("Port"), type: "number" },
   ] },
+  { title: k("WireGuard on OPNsense"), fields: [
+    { key: "opn_host", label: k("Address"), hint: k("reached over the REST API; empty — no OPNsense server; the API key is entered on the “VPN on OPNsense” page"), type: "text" },
+    { key: "opn_wg_instance", label: k("Instance"), hint: k("the name of the instance or its device, e.g. wg0"), type: "text" },
+    { key: "opn_verify_tls", label: k("Check the TLS certificate"), hint: k("off for the self-signed certificate of OPNsense"), type: "bool" },
+  ] },
   { title: k("Panel"), fields: [
     { key: "public_base_url", label: k("Address of the panel"), hint: k("for config links and Keystone, e.g. https://nc.example.com"), type: "text" },
     { key: "spa_public_url", label: k("Address for Keystone redirects"), hint: k("empty — the address of the panel"), type: "text" },

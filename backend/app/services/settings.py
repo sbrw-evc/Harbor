@@ -57,6 +57,13 @@ DEFAULTS = {
     "mt_wg_iface": "wg-nc",
     "mt_wg_network": "10.9.0.0/24",
     "mt_wg_port": 51820,
+    # WireGuard on OPNsense (REST API; the API key and secret are in OpenBao, opnsense/api).
+    "opn_host": "",
+    "opn_wg_instance": "wg0",
+    "opn_verify_tls": False,
+    "opn_endpoint_host": "",
+    "opn_client_dns": "",
+    "opn_allowed_ips": "0.0.0.0/0",
     # The panel itself.
     "public_base_url": "",
     "spa_public_url": "",
@@ -78,8 +85,8 @@ PRIVATE = frozenset({"spa", "auth_mode"})
 # The settings of the infrastructure: a change rebuilds the adapters (app/runtime.py).
 INFRA = frozenset({"awg_host", "awg_ssh_user", "awg_container", "awg_iface", "awg_bin", "awg_dir", "router_host",
                    "router_ssh_user", "gateway_ip", "lan_cidr", "lan_if", "tunnel_net", "port_forwards", "mt_wg_iface",
-                   "mt_wg_network", "mt_wg_port", "public_base_url", "spa_public_url", "session_ttl_hours",
-                   "cookie_secure", "flows_ttl_days"})
+                   "mt_wg_network", "mt_wg_port", "opn_host", "opn_wg_instance", "opn_verify_tls", "public_base_url",
+                   "spa_public_url", "session_ttl_hours", "cookie_secure", "flows_ttl_days"})
 
 _HOST = re.compile(r"^(?=.{1,253}$)([A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?)(\.[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*$")
 _NAME = re.compile(r"^[A-Za-z0-9_.-]{1,64}$")
@@ -163,11 +170,31 @@ def _forwards(v) -> str:
     return " ".join(out)
 
 
+def _flag(v) -> bool:
+    if isinstance(v, str):
+        return v.strip().lower() in ("1", "true", "yes", "on")
+    return bool(v)
+
+
+def _ips(v) -> str:
+    items = str(v or "").replace(",", " ").split()
+    return ", ".join(_ip(x, empty=False) for x in items)
+
+
+def _cidrs(v) -> str:
+    items = str(v or "").replace(",", " ").split()
+    if not items:
+        raise ValueError("networks such as 0.0.0.0/0, ::/0")
+    return ", ".join(_cidr(x) for x in items)
+
+
 VALIDATORS = {
     "awg_host": _host, "awg_ssh_user": _name, "awg_container": _name, "awg_iface": _name, "awg_bin": _name,
     "awg_dir": _path, "router_host": _host, "router_ssh_user": _name, "gateway_ip": _ip, "lan_cidr": _cidr,
     "lan_if": _name, "tunnel_net": _cidr, "port_forwards": _forwards, "mt_wg_iface": _name, "mt_wg_network": _cidr,
-    "mt_wg_port": _int(1, 65535), "public_base_url": _url, "spa_public_url": _url, "session_ttl_hours": _int(1, 720),
+    "mt_wg_port": _int(1, 65535), "opn_host": _host, "opn_wg_instance": _name, "opn_verify_tls": _flag,
+    "opn_endpoint_host": _host, "opn_client_dns": _ips, "opn_allowed_ips": _cidrs, "public_base_url": _url,
+    "spa_public_url": _url, "session_ttl_hours": _int(1, 720),
     "cookie_secure": bool, "flows_ttl_days": _int(1, 3650),
 }
 

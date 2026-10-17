@@ -192,7 +192,7 @@ export default function Clients() {
                     <div className="flex items-center gap-2">
                       <StatusDot on={c.online} />
                       <span className="max-w-[260px] truncate font-medium text-slate-100" title={c.name}>{c.name}</span>
-                      {c.server === "mikrotik" && <Badge tone="blue" className="!px-1">MikroTik</Badge>}
+                      {c.server !== "amnezia" && <Badge tone="blue" className="!px-1">{SERVER_LABEL[c.server]}</Badge>}
                       {c.system && <Badge tone="violet">{t("gateway")}</Badge>}
                       {!c.managed && <Badge tone="amber" className="!px-1">{t("no key")}</Badge>}
                     </div>
@@ -245,7 +245,7 @@ export default function Clients() {
           expires_at: settings.data?.default_valid_days ? new Date(Date.now() + Number(settings.data.default_valid_days) * 86400000).toISOString() : null,
         }} />
       </Modal>
-      <ConfigModal clientId={configFor} onClose={() => setConfigFor(null)} />
+      <ConfigModal clientId={configFor} server={list.data?.find((c) => c.id === configFor)?.server} onClose={() => setConfigFor(null)} />
     </Page>
   );
 }

@@ -9,6 +9,7 @@
 **Usage**
 - [[VPN clients|Clients]]
 - [[VPN on MikroTik|MikroTik-VPN]]
+- [[VPN on OPNsense|OPNsense-VPN]]
 - [[Monitoring and alerts|Monitoring]]
 - [[Network devices|Devices]]
 - [[Network map|Network-Map]]
@@ -32,6 +33,7 @@
 - [[Конфигурация|ru-Configuration]]
 - [[Клиенты VPN|ru-Clients]]
 - [[VPN на MikroTik|ru-MikroTik-VPN]]
+- [[VPN на OPNsense|ru-OPNsense-VPN]]
 - [[Мониторинг и алерты|ru-Monitoring]]
 - [[Сетевые устройства|ru-Devices]]
 - [[Карта сети|ru-Network-Map]]

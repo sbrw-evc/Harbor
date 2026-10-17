@@ -12,6 +12,7 @@ import LoginPage from "@/pages/Login";
 const Dashboard = lazy(() => import("@/pages/Dashboard"));
 const Clients = lazy(() => import("@/pages/Clients"));
 const MikrotikVpn = lazy(() => import("@/pages/MikrotikVpn"));
+const OpnsenseVpn = lazy(() => import("@/pages/OpnsenseVpn"));
 const ClientDetail = lazy(() => import("@/pages/ClientDetail"));
 const Analytics = lazy(() => import("@/pages/Analytics"));
 const MapPage = lazy(() => import("@/pages/MapPage"));
@@ -60,6 +61,7 @@ function Private() {
             <Route path="/alerts" element={<Alerts />} />
             <Route path="/routing" element={<Routing />} />
             <Route path="/mikrotik-vpn" element={<MikrotikVpn />} />
+            <Route path="/opnsense-vpn" element={<OpnsenseVpn />} />
             <Route path="/server" element={<Guard role="admin"><Server /></Guard>} />
             <Route path="/audit" element={<Guard role="admin"><Audit /></Guard>} />
             <Route path="/users" element={<Guard role="admin"><Users /></Guard>} />

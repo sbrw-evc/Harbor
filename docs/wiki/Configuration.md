@@ -46,6 +46,7 @@ the first device, flows, a VPN client, Telegram and backups.
 | Amnezia server (VPS) | Address, SSH user, container, interface, utility, config folder | Empty address — no Amnezia server |
 | Gateway and LAN | Address of the gateway, home network, LAN interface, tunnel network, port forwards | Written to `gateway.json` for awg-client and `collector.json` for the flow collector |
 | WireGuard on MikroTik | Interface, client network, port | See [[MikroTik-VPN]] |
+| WireGuard on OPNsense | Address, instance, TLS check | The API key is entered on the VPN on OPNsense page and kept in OpenBao; see [[OPNsense-VPN]] |
 | Panel | Address of the panel, address for Keystone redirects, session lifetime, cookies only over HTTPS, flow retention | |
 | Access and storage | SSH key of the panel, Check the router / VPS, Create the gateway client | The key pair is created in OpenBao (`infra/ssh`); the public key is shown with the MikroTik command |
 | Client configs | DNS for clients, server address in configs, share link lifetime | |

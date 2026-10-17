@@ -1,7 +1,7 @@
 import type {
   Alert, ApiTokenInfo, AuditItem, BackupItem, CustomPrefix, FlowField, FlowOverview, FlowQuery, FlowRecord, FlowResult,
   FlowStatus, RouteCheck, SavedFilter, ClientBundle, GeoData, HeatCell, LivePoint, PanelUser, Range, RouterStatus, SeriesPoint,
-  MikrotikVpnInfo, ServerInfo, ServerKind, Session, Settings, SiteListSummary, Summary, TopRow, VpnClient, VpnServer,
+  MikrotikVpnInfo, OpnsenseVpnInfo, ServerInfo, ServerKind, Session, Settings, SiteListSummary, Summary, TopRow, VpnClient, VpnServer,
   AuthConfig, AuthMode, ImportReport, InfraInfo, Role, SetupStage, SetupState, SpaStatus, StorageCheck, StorageInput,
   DeviceAction, DevicePlatform, DiscoveryResult, FlowExporter, FlowRule, FlowRuleKind, NetworkDevice, NetworkEndpoint,
   SavedView, ThreatInfo, Topology, Onboarding,
@@ -143,6 +143,9 @@ export class OpsApi extends Resource {
   serverInfo() { return this.http.get<ServerInfo>("/api/server/info"); }
   mikrotikVpn() { return this.http.get<MikrotikVpnInfo>("/api/mikrotik-vpn"); }
   setupMikrotikVpn() { return this.http.post<MikrotikVpnInfo>("/api/mikrotik-vpn/setup"); }
+  opnsenseVpn() { return this.http.get<OpnsenseVpnInfo>("/api/opnsense-vpn"); }
+  setOpnsenseKey(key: string, secret: string) { return this.http.put<OpnsenseVpnInfo>("/api/opnsense-vpn/credentials", { key, secret }); }
+  removeOpnsenseKey() { return this.http.delete<OpnsenseVpnInfo>("/api/opnsense-vpn/credentials"); }
   serverConfig() { return this.http.get<{ config: string; backups: string[] }>("/api/server/config"); }
   saveServerConfig(config: string) { return this.http.put("/api/server/config", { config }); }
   backup(name: string) { return this.http.get<{ config: string }>(`/api/server/backups/${encodeURIComponent(name)}`); }

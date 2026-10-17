@@ -17,6 +17,7 @@ self-hosted AmneziaWG VPN and selective routing (sites from a list go through th
 | [[Configuration]] | The setup wizard, settings, sign-in modes |
 | [[Clients]] | VPN client lifecycle, quotas, expiry, config delivery |
 | [[MikroTik-VPN]] | WireGuard server on MikroTik: setup, clients, configs |
+| [[OPNsense-VPN]] | WireGuard instance on OPNsense: API key, clients, configs |
 | [[Monitoring]] | Dashboard, analytics, map, alerts, notifications, Telegram |
 | [[Devices]] | Supported platforms, adding devices, polling, settings from the panel, network clients |
 | [[Network-Map]] | The live network map |

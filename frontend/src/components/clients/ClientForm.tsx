@@ -47,8 +47,12 @@ export default function ClientForm({ initial, submitLabel, busy, onSubmit, serve
   return (
     <form onSubmit={submit} className="space-y-4">
       {servers && servers.length > 1 && (
-        <Field label={t("VPN server")} hint={current && !current.ready ? t("WireGuard on MikroTik is not set up — set it up on the “VPN on MikroTik” page")
-          : server === "mikrotik" ? t("WireGuard on the home router: access to the local network, and sites from the list go through Amnezia") : t("AmneziaWG on a VPS with traffic obfuscation")}>
+        <Field label={t("VPN server")} hint={current && !current.ready ? (server === "opnsense"
+          ? t("WireGuard on OPNsense is not set up — enter the address and the API key on the “VPN on OPNsense” page")
+          : t("WireGuard on MikroTik is not set up — set it up on the “VPN on MikroTik” page"))
+          : server === "mikrotik" ? t("WireGuard on the home router: access to the local network, and sites from the list go through Amnezia")
+          : server === "opnsense" ? t("WireGuard on the OPNsense firewall: access to the local network by its rules")
+          : t("AmneziaWG on a VPS with traffic obfuscation")}>
           <Segmented layoutId="client-server" value={server} onChange={setServer}
             options={servers.map((s) => ({ value: s.kind, label: s.title }))} />
         </Field>

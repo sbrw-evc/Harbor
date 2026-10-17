@@ -95,9 +95,9 @@ export interface SpaStatus {
   redirect_uri: string | null;
 }
 
-export type ServerKind = "amnezia" | "mikrotik";
+export type ServerKind = "amnezia" | "mikrotik" | "opnsense";
 export interface VpnServer { kind: ServerKind; title: string; ready: boolean }
-export const SERVER_LABEL: Record<ServerKind, string> = { amnezia: "Amnezia", mikrotik: "MikroTik" };
+export const SERVER_LABEL: Record<ServerKind, string> = { amnezia: "Amnezia", mikrotik: "MikroTik", opnsense: "OPNsense" };
 
 export interface VpnClient {
   id: string;
@@ -233,6 +233,13 @@ export interface MikrotikVpnInfo {
   configured: boolean; interface: string; network: string; server_ip: string; lan_cidr: string; port: number;
   public_key: string | null; running: boolean; public_address: string; endpoint_host: string;
   client_dns: string; allowed_ips: string; peers_total: number; peers_disabled: number;
+}
+
+export interface OpnsenseVpnInfo {
+  host: string; instance: string; verify_tls: boolean; credentials: boolean; found: boolean; error: string | null;
+  uuid: string | null; device: string | null; enabled: boolean; port: number | null; network: string | null;
+  server_ip: string | null; public_key: string | null; endpoint_host: string; public_address: string | null;
+  client_dns: string; allowed_ips: string; peers_total: number; peers_disabled: number; peers_online: number;
 }
 
 export interface ServerInfo {

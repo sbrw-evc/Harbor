@@ -9,6 +9,7 @@ from .services.flows import FlowService
 from .adapters.geoip import DbIpGeoLocator
 from .adapters.mikrotik import MikrotikSshRouter
 from .adapters.mikrotik_wg import MikrotikWireguard
+from .adapters.opnsense_wg import OpnsenseWireguard
 from .adapters.oui import OuiDatabase
 from .adapters.ssh import SshKeyProvider, SshRunner
 from .adapters.telegram import TelegramNotifier
@@ -24,7 +25,7 @@ from .services.audit import AuditService
 from .services.auth import AuthService
 from .services.gateway_files import GatewayFiles
 from .services.identity.spa import MODE_KEYSTONE, MODE_LOCAL, SECRET_PATH as SPA_KEY_SECRET, SYNC_SECONDS, SpaService
-from .services.backends import AmneziaBackend, MikrotikBackend
+from .services.backends import AmneziaBackend, MikrotikBackend, OpnsenseBackend
 from .services.backups import BackupService
 from .services.clients import VpnClientService
 from .services.configs import ClientConfigBuilder
@@ -48,6 +49,7 @@ log = logging.getLogger(__name__)
 STARTUP_LOCK_KEY = 7_331_003
 MT_LOCK_KEY = 7_331_004
 SPA_LOCK_KEY = 7_331_005
+OPN_LOCK_KEY = 7_331_006
 
 
 class Container:
@@ -72,6 +74,8 @@ class Container:
         self.mikrotik_wg = rc.adapter(lambda r: MikrotikWireguard(
             SshRunner(r.router_host, r.router_ssh_user, keys, known_hosts), r.mt_wg_iface, r.mt_wg_network,
             r.mt_wg_port))
+        self.opnsense_wg = rc.adapter(lambda r: OpnsenseWireguard(r.opn_host, r.opn_wg_instance, r.opn_verify_tls,
+                                                                  self.secrets))
         self.geo = DbIpGeoLocator(cfg.geoip_dir)
         self.files = GatewayFiles(cfg.gateway_config_dir, cfg.shared_dir, {
             "url": storage.clickhouse_url, "user": storage.clickhouse_user, "password": storage.clickhouse_password,
@@ -95,7 +99,10 @@ class Container:
                                       self.settings, lambda: rc.awg_host)
         self.mikrotik = MikrotikBackend(self.mikrotik_wg, self.settings, DistributedLock(dsn, MT_LOCK_KEY),
                                         lambda: rc.lan_cidr, lambda: rc.router_host)
-        backends = [self.amnezia, self.mikrotik]
+        self.opnsense = OpnsenseBackend(self.opnsense_wg, self.settings, self.secrets,
+                                        DistributedLock(dsn, OPN_LOCK_KEY), lambda: rc.opn_host,
+                                        self._router_public_address)
+        backends = [self.amnezia, self.mikrotik, self.opnsense]
         self.clients = VpnClientService(self.db, backends, self.secrets, self.settings, self.audit, self.bus,
                                         lambda: rc.public_base_url, self.live)
         self.collector = TrafficCollector(self.db, backends, self.clients, self.geo, self.alerts, self.bus)
@@ -118,6 +125,10 @@ class Container:
                                             rc.public_urls, gateway_client=self.files.has_awg_conf)
         self.election = LeaderElection(dsn, self._become_leader, self._lose_leadership)
         self.scheduler: Scheduler | None = None
+
+    async def _router_public_address(self) -> str:
+        """The public address of the MikroTik in front of OPNsense (it forwards the WireGuard port)."""
+        return await self.mikrotik_wg.public_address() if self.rc.router_host else ""
 
     def _settings_changed(self, rc: RuntimeConfig) -> None:
         self.spa.public_url = (rc.spa_public_url or "").rstrip("/")
