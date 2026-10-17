@@ -80,7 +80,7 @@ jobs:
       - registryUrl: '@server_url@'
         userName: '@job_token@'
         passwordSecret: onedev-token
-    platforms: linux/amd64,linux/arm64
+    platforms: linux/amd64
     condition: SUCCESSFUL
     optional: false
   - !BuildImageStep
@@ -92,7 +92,7 @@ jobs:
       - registryUrl: '@server_url@'
         userName: '@job_token@'
         passwordSecret: onedev-token
-    platforms: linux/amd64,linux/arm64
+    platforms: linux/amd64
     condition: SUCCESSFUL
     optional: false
   - !BuildImageStep
@@ -104,7 +104,7 @@ jobs:
       - registryUrl: '@server_url@'
         userName: '@job_token@'
         passwordSecret: onedev-token
-    platforms: linux/amd64,linux/arm64
+    platforms: linux/amd64
     condition: SUCCESSFUL
     optional: false
   - !BuildImageStep
