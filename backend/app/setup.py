@@ -7,7 +7,7 @@ import asyncio
 import logging
 
 from .bootstrap import Bootstrap, SetupGate
-from .config import Settings
+from .config import Settings, legacy_environ
 from .container import Container
 from .db.repositories import UserRepo
 from .services.identity.spa import MODE_KEYSTONE, MODE_LOCAL
@@ -41,7 +41,7 @@ class SetupState:
                 return True
             if not self.boot.exists():
                 try:
-                    await self.boot.import_legacy()
+                    await self.boot.import_legacy(legacy_environ())
                 except Exception as e:
                     log.warning("old storage settings are not taken over yet: %s", e)
             if not self.boot.exists():

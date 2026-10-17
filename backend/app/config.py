@@ -1,4 +1,6 @@
+import os
 from functools import lru_cache
+from urllib.parse import quote
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -27,3 +29,32 @@ class Settings(BaseSettings):
 @lru_cache
 def get_settings() -> Settings:
     return Settings()
+
+
+LEGACY_ENV_FILE = "/legacy.env"
+
+
+def legacy_environ(path: str = LEGACY_ENV_FILE) -> dict[str, str]:
+    """The values of an older installation, read once to take it over: its .env (mounted read-only by the compose
+    file) under the environment of the process. Nothing here is needed by a new installation."""
+    values: dict[str, str] = {}
+    try:
+        with open(path) as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
+                k, v = line.split("=", 1)
+                v = v.strip()
+                if len(v) >= 2 and v[0] == v[-1] and v[0] in "\"'":
+                    v = v[1:-1]
+                values[k.strip()] = v
+    except OSError:
+        pass
+    old = {k: v for k, v in os.environ.items()}
+    merged = {**values, **old}
+    # The old compose file built DATABASE_URL from POSTGRES_PASSWORD for the bundled PostgreSQL.
+    if not merged.get("DATABASE_URL") and merged.get("POSTGRES_PASSWORD"):
+        merged["DATABASE_URL"] = (f"postgresql+asyncpg://amnezia:{quote(merged['POSTGRES_PASSWORD'], safe='')}"
+                                  "@postgres:5432/amnezia")
+    return merged

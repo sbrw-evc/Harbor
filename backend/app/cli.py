@@ -3,7 +3,7 @@ import asyncio
 import getpass
 
 from .bootstrap import Bootstrap
-from .config import get_settings
+from .config import get_settings, legacy_environ
 from .db.base import Database
 from .domain.models import Role
 from .services.audit import AuditService
@@ -19,7 +19,7 @@ async def _storage():
     cfg = get_settings()
     boot = Bootstrap(cfg.data_dir, cfg.bao_approle_dir)
     if not boot.exists():
-        await boot.import_legacy()
+        await boot.import_legacy(legacy_environ())
     if not boot.exists():
         raise SystemExit("Network Control is not set up yet: finish the setup wizard first")
     st = await boot.resolve()

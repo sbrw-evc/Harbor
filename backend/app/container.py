@@ -14,7 +14,7 @@ from .adapters.ssh import SshKeyProvider, SshRunner
 from .adapters.telegram import TelegramNotifier
 from .bootstrap import Storage
 from .cluster import CONFIG_LOCK_KEY, DistributedLock, LeaderElection, LiveState, PgEventBus, plain_dsn
-from .config import Settings
+from .config import Settings, legacy_environ
 from .db.base import Database
 from .db.repositories import UserRepo
 from .runtime import RuntimeConfig
@@ -23,7 +23,7 @@ from .services.analytics import AnalyticsService
 from .services.audit import AuditService
 from .services.auth import AuthService
 from .services.gateway_files import GatewayFiles
-from .services.identity.spa import MODE_KEYSTONE, MODE_LOCAL, SYNC_SECONDS, SpaService
+from .services.identity.spa import MODE_KEYSTONE, MODE_LOCAL, SECRET_PATH as SPA_KEY_SECRET, SYNC_SECONDS, SpaService
 from .services.backends import AmneziaBackend, MikrotikBackend
 from .services.backups import BackupService
 from .services.clients import VpnClientService
@@ -123,6 +123,14 @@ class Container:
         self.spa.public_url = (rc.spa_public_url or "").rstrip("/")
         self.files.write(rc)
 
+    async def _import_spa_key(self, env: dict) -> None:
+        """The SPA connection key of an older .env moves to OpenBao once (the panel manages it there now)."""
+        raw = (env.get("SPA_CONNECTION_KEY") or "").strip()
+        if not raw or self.cfg.spa_connection_key or await self.secrets.get(SPA_KEY_SECRET):
+            return
+        await self.secrets.put(SPA_KEY_SECRET, {"value": raw})
+        log.warning("the SPA connection key moved from .env to OpenBao (spa/connection_key); remove it from .env")
+
     async def _choose_auth_mode(self) -> None:
         """An installation from before the two modes signed in through SPA: it keeps doing so."""
         if await self.settings.get("auth_mode"):
@@ -140,7 +148,9 @@ class Container:
         await self.live.start()
         async with self.startup_lock.hold():
             await self.db.create_schema()
-            await self.rc.import_legacy_env()
+            env = legacy_environ()
+            await self.rc.import_legacy_env(env)
+            await self._import_spa_key(env)
             await self._choose_auth_mode()
         await self.rc.refresh_now()
         self._settings_changed(self.rc)
