@@ -4,7 +4,7 @@
 
 *Ранее Network Control.* Harbor собирает в одном месте сеть одного дома или небольшого офиса: шлюз с VPN и выборочной
 маршрутизацией, устройства, клиентов и трафик. Работает самостоятельно (со своими пользователями) или со входом через
-[Keystone](https://github.com/sbrw-evc/Keystone), рядом с приложениями семейства: Ledger (инвентаризация), Beacon
+[Keystone](https://onedev.evcsbrw.ru/Monitoring/Keystone), рядом с приложениями семейства: Ledger (инвентаризация), Beacon
 (инциденты) и Current (сеть организации).
 
 Панель управления домашней или корпоративной сетью: **сетевые устройства** 25+ платформ с настройкой из панели,
@@ -63,7 +63,7 @@
 - **Маршрутизация** — статус туннеля на MikroTik, загрузка списка сайтов (`ip-list.json`), свои домены и подсети,
   проверка «куда пойдёт трафик», автоматический переход на провайдера при падении туннеля.
 - **Сервер AWG** — параметры обфускации, редактор `awg0.conf` с резервными копиями и применением без разрыва соединений.
-- **Безопасность** — вход и доступ управляются в [SPA — единой точке авторизации](https://github.com/sbrw-evc/SPA-Single-point-of-authorization-) (пароли, ключи доступа, MFA,
+- **Безопасность** — вход и доступ управляются в [SPA — единой точке авторизации](https://onedev.evcsbrw.ru/Monitoring/Keystone) (пароли, ключи доступа, MFA,
   каталоги — там), роли (администратор / оператор / наблюдатель) назначаются в SPA, сессии с отзывом,
   API-токены, журнал аудита, секреты только в OpenBao.
 - **Первые шаги и пошаговая настройка** — на обзоре чек-лист от установки до работающей панели (подключение SPA,
@@ -94,7 +94,7 @@
 | `clickhouse` | сетевые потоки и агрегаты; словари сайтов, угроз, экспортёров, интерфейсов и хостов |
 | `flow-collector` | goflow2 (NetFlow / IPFIX UDP 2055, sFlow UDP 6343) + обогащение (страна, ASN, направление, маршрут, экспортёр) |
 
-Подробности — в [Wiki](https://github.com/sbrw-evc/Network-Control/wiki/ru-Home).
+Подробности — в [Wiki](https://onedev.evcsbrw.ru/Monitoring/Harbor/~wiki/main/ru-Home).
 
 ## Поддерживаемые устройства
 
@@ -105,14 +105,14 @@
 | Корпоративный | Cisco IOS / IOS-XE / NX-OS и Meraki, HP ProCurve / HPE Aruba (ArubaOS-Switch, AOS-CX), HPE Comware / H3C, Dell OS10, Juniper Junos, Huawei VRP, Fortinet FortiGate, Eltex, серверы через Redfish (iDRAC, iLO, XCC, Supermicro) |
 | Всё остальное | SNMP v1 / v2c / v3 со стандартными MIB |
 
-Что собирается и что можно менять на каждой платформе — [Wiki → Сетевые устройства](https://github.com/sbrw-evc/Network-Control/wiki/ru-Devices).
+Что собирается и что можно менять на каждой платформе — [Wiki → Сетевые устройства](https://onedev.evcsbrw.ru/Monitoring/Harbor/~wiki/main/ru-Devices).
 
 ## Быстрый старт
 
 Требования: Docker 24+ с Compose v2 и MikroTik с RouterOS 7; по желанию VPS с Amnezia и Keystone (SPA).
 
 ```bash
-git clone https://github.com/sbrw-evc/Network-Control.git /opt/network-control
+git clone https://onedev.evcsbrw.ru/Monitoring/Harbor /opt/network-control
 cd /opt/network-control
 ./install.sh              # создаст пароли, поднимет стек, покажет адрес и код установки
 ```
@@ -125,14 +125,14 @@ cd /opt/network-control
 
 - **Пользователи Harbor**: самостоятельная установка. Первый администратор создаётся в мастере; пароли
   (argon2id) и секреты TOTP хранятся в OpenBao и никогда не попадают в PostgreSQL.
-- **Keystone**: [SPA / Keystone](https://github.com/sbrw-evc/SPA-Single-point-of-authorization-) (OpenID Connect)
+- **Keystone**: [SPA / Keystone](https://onedev.evcsbrw.ru/Monitoring/Keystone) (OpenID Connect)
   выполняет вход и назначает роли (`admin`, `operator`, `viewer`), панель синхронизирует людей каждые 5 минут.
   Ключ подключения `spa1.…` вставляется в мастере или в **«Настройки → SPA»** (хранится в OpenBao).
 
 Самостоятельную панель можно позже перевести на Keystone: разрешите в Keystone перенос пользователей для приложения,
 нажмите **«Перенести локальных пользователей»** (пароли и роли переносятся), затем **«Перейти на Keystone»**. Переход не
 сработает, пока ни у кого там нет роли `admin`, поэтому доступ не потеряется. См.
-[Конфигурацию](https://github.com/sbrw-evc/Network-Control/wiki/ru-Configuration).
+[Конфигурацию](https://onedev.evcsbrw.ru/Monitoring/Harbor/~wiki/main/ru-Configuration).
 
 После мастера чек-лист **«Первые шаги»** на обзоре проводит по остальному:
 
@@ -141,7 +141,7 @@ cd /opt/network-control
    запишет конфигурацию туннеля.
 3. Загрузите список сайтов в разделе «Маршрутизация».
 
-Пошагово — [Установка](https://github.com/sbrw-evc/Network-Control/wiki/ru-Installation).
+Пошагово — [Установка](https://onedev.evcsbrw.ru/Monitoring/Harbor/~wiki/main/ru-Installation).
 
 ## Docker-образы
 
@@ -174,7 +174,7 @@ pip install -r backend/requirements.txt -r backend/requirements-dev.txt
 DEMO_DATABASE_URL=postgresql+asyncpg://user:pass@127.0.0.1:5432/nc_demo ./scripts/screenshots.sh
 ```
 
-Структура, принципы и API — в [Wiki → Разработка](https://github.com/sbrw-evc/Network-Control/wiki/ru-Development).
+Структура, принципы и API — в [Wiki → Разработка](https://onedev.evcsbrw.ru/Monitoring/Harbor/~wiki/main/ru-Development).
 Интерактивная документация API доступна на `/api/docs`.
 
 ## Совместимость после переименования

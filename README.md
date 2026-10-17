@@ -4,7 +4,7 @@
 
 *Formerly Network Control.* Harbor is the network of one home or small office in one place: the gateway with its
 VPN and selective routing, the devices, the clients and the traffic. It stands on its own (its own users) or signs
-people in through [Keystone](https://github.com/sbrw-evc/Keystone), next to the applications of the family —
+people in through [Keystone](https://onedev.evcsbrw.ru/Monitoring/Keystone), next to the applications of the family —
 Ledger (inventory), Beacon (incidents) and Current (the network of an organisation).
 
 A control panel for a home or corporate network: **network devices** of 25+ platforms with settings from the panel,
@@ -62,7 +62,7 @@ The screenshots are taken from the real application with demo data: `./scripts/s
 - **Routing** — tunnel status on MikroTik, site list upload (`ip-list.json`), custom domains and prefixes,
   "where will this traffic go" check, automatic fallback to the ISP when the tunnel is down.
 - **AWG server** — obfuscation parameters, an `awg0.conf` editor with backups that applies changes without dropping connections.
-- **Security** — sign-in and access managed in [SPA — Single Point of Authorization](https://github.com/sbrw-evc/SPA-Single-point-of-authorization-) (passwords, passkeys, MFA,
+- **Security** — sign-in and access managed in [SPA — Single Point of Authorization](https://onedev.evcsbrw.ru/Monitoring/Keystone) (passwords, passkeys, MFA,
   directories live there), roles (administrator / operator / viewer) assigned in SPA, revocable sessions,
   API tokens, audit log, secrets kept only in OpenBao.
 - **First steps and setup guides** — the overview shows a checklist from installation to a working panel (SPA
@@ -93,7 +93,7 @@ The screenshots are taken from the real application with demo data: `./scripts/s
 | `clickhouse` | Network flows and aggregates; site, threat, exporter, interface and host dictionaries |
 | `flow-collector` | goflow2 (NetFlow / IPFIX UDP 2055, sFlow UDP 6343) + enrichment (country, ASN, direction, route, exporter) |
 
-See the [Wiki](https://github.com/sbrw-evc/Network-Control/wiki) for details.
+See the [Wiki](https://onedev.evcsbrw.ru/Monitoring/Harbor/~wiki) for details.
 
 ## Supported devices
 
@@ -104,14 +104,14 @@ See the [Wiki](https://github.com/sbrw-evc/Network-Control/wiki) for details.
 | Enterprise | Cisco IOS / IOS-XE / NX-OS and Meraki, HP ProCurve / HPE Aruba (ArubaOS-Switch, AOS-CX), HPE Comware / H3C, Dell OS10, Juniper Junos, Huawei VRP, Fortinet FortiGate, Eltex, servers via Redfish (iDRAC, iLO, XCC, Supermicro) |
 | Anything else | SNMP v1 / v2c / v3 with standard MIBs |
 
-What each platform collects and allows to change: [Wiki → Network devices](https://github.com/sbrw-evc/Network-Control/wiki/Devices).
+What each platform collects and allows to change: [Wiki → Network devices](https://onedev.evcsbrw.ru/Monitoring/Harbor/~wiki/main/Devices).
 
 ## Quick start
 
 Requirements: Docker 24+ with Compose v2 and MikroTik with RouterOS 7; optionally an Amnezia VPS and Keystone (SPA).
 
 ```bash
-git clone https://github.com/sbrw-evc/Network-Control.git /opt/network-control
+git clone https://onedev.evcsbrw.ru/Monitoring/Harbor /opt/network-control
 cd /opt/network-control
 ./install.sh              # generates the passwords, starts the stack, prints the address and the setup code
 ```
@@ -124,13 +124,13 @@ sign-in. `.env` keeps only the passwords of the bundled databases, the version a
 
 - **Users of Harbor** — a standalone installation: the first administrator is created in the wizard; passwords
   (argon2id) and TOTP secrets are kept in OpenBao, never in PostgreSQL.
-- **Keystone** — [SPA / Keystone](https://github.com/sbrw-evc/SPA-Single-point-of-authorization-) (OpenID Connect)
+- **Keystone** — [SPA / Keystone](https://onedev.evcsbrw.ru/Monitoring/Keystone) (OpenID Connect)
   signs people in and decides their roles (`admin`, `operator`, `viewer`); the panel synchronises them every 5 minutes.
   The connection key `spa1.…` is pasted in the wizard or in **Settings → SPA** (kept in OpenBao).
 
 A standalone panel can move to Keystone later: allow moving users for the application in Keystone, press **Move the
 local users** (their passwords and roles go along), then **Switch to Keystone** — refused while nobody has the `admin`
-role there, so nobody is locked out. See [Configuration](https://github.com/sbrw-evc/Network-Control/wiki/Configuration).
+role there, so nobody is locked out. See [Configuration](https://onedev.evcsbrw.ru/Monitoring/Harbor/~wiki/main/Configuration).
 
 After the wizard the **First steps** checklist of the overview leads through the rest:
 
@@ -139,7 +139,7 @@ After the wizard the **First steps** checklist of the overview leads through the
    tunnel config itself.
 3. Upload the site list in the "Routing" section.
 
-Step by step — [Installation](https://github.com/sbrw-evc/Network-Control/wiki/Installation).
+Step by step — [Installation](https://onedev.evcsbrw.ru/Monitoring/Harbor/~wiki/main/Installation).
 
 ## Docker images
 
@@ -172,7 +172,7 @@ pip install -r backend/requirements.txt -r backend/requirements-dev.txt
 DEMO_DATABASE_URL=postgresql+asyncpg://user:pass@127.0.0.1:5432/nc_demo ./scripts/screenshots.sh
 ```
 
-Structure, principles and API — see [Wiki → Development](https://github.com/sbrw-evc/Network-Control/wiki/Development).
+Structure, principles and API — see [Wiki → Development](https://onedev.evcsbrw.ru/Monitoring/Harbor/~wiki/main/Development).
 Interactive API documentation is available at `/api/docs`.
 
 ## Compatibility after the rename
