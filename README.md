@@ -153,7 +153,7 @@ Every release publishes images to GitHub Container Registry (tags `X.Y.Z`, `X.Y`
 | `ghcr.io/sbrw-evc/network-control-awg-client` | linux/amd64 |
 
 The version is set by `NC_VERSION` in `.env`; `install.sh` pulls the images, `docker compose up -d --build` builds them locally.
-The release page also has `network-control-X.Y.Z-deploy.tar.gz` — everything needed to run the stack without cloning the repository.
+The release page also has `harbor-X.Y.Z-deploy.tar.gz` — everything needed to run the stack without cloning the repository.
 
 ## Development
 
