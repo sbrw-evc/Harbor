@@ -10,6 +10,7 @@ import re
 import uuid
 
 from sqlalchemy import delete, select
+from sqlalchemy.dialects.postgresql import insert
 
 from ..adapters.devices import PLATFORMS, platform
 from ..adapters.devices import discovery
@@ -372,13 +373,18 @@ class DeviceService:
                 for r in rows:
                     if (now - r.seen_at).total_seconds() <= FRESH_SECONDS:
                         by_mac.setdefault(r.mac, []).append(r)
+                if not by_mac:
+                    continue
+                # Polls of several devices run concurrently and can see the same new MAC: create rows race-free.
+                await s.execute(insert(NetworkEndpoint).values(
+                    [{"mac": m, "first_seen": now, "last_seen": now, "vendor": self.oui.vendor(m)} for m in sorted(by_mac)]
+                ).on_conflict_do_nothing(index_elements=["mac"]))
                 existing = {e.mac: e for e in (await s.execute(
-                    select(NetworkEndpoint).where(NetworkEndpoint.mac.in_(chunk)))).scalars().all()}
+                    select(NetworkEndpoint).where(NetworkEndpoint.mac.in_(sorted(by_mac)))
+                    .order_by(NetworkEndpoint.mac).with_for_update())).scalars().all()}
                 for mac, sights in by_mac.items():
                     best = max(sights, key=lambda r: (SOURCE_RANK.get(r.source, 0), r.seen_at))
-                    e = existing.get(mac) or NetworkEndpoint(mac=mac, first_seen=now, vendor=self.oui.vendor(mac))
-                    if mac not in existing:
-                        s.add(e)
+                    e = existing[mac]
                     e.ip = next((r.ip for r in sorted(sights, key=lambda r: SOURCE_RANK.get(r.source, 0), reverse=True)
                                  if r.ip), e.ip or "")
                     e.hostname = next((r.hostname for r in sights if r.hostname), e.hostname or "")
@@ -498,6 +504,8 @@ class DeviceService:
         async with self._db.session() as s:
             sights = (await s.execute(select(EndpointSighting).where(EndpointSighting.mac == mac))).scalars().all()
             devices = {d.id: d for d in (await s.execute(select(NetworkDevice))).scalars().all()}
+        # The best attachment point first (controller over a router's DHCP lease), as in rebuild_endpoints.
+        sights = sorted(sights, key=lambda r: (SOURCE_RANK.get(r.source, 0), r.seen_at), reverse=True)
         for sight in sights:
             d = devices.get(sight.device_id)
             if d and "endpoint_block" in platform(d.platform).capabilities(d.transport):
