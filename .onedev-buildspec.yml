@@ -71,52 +71,48 @@ jobs:
     buildVersion: '@tag@'
     condition: SUCCESSFUL
     optional: false
-  - !BuildImageStep
+  - !BuildImageWithKanikoStep
     name: image backend
-    buildPath: backend
+    buildContext: backend
     output: !RegistryOutput
-      tags: '@server_host@/monitoring/harbor/backend:@file:.ci/version@ @server_host@/monitoring/harbor/backend:@file:.ci/minor@ @server_host@/monitoring/harbor/backend:latest'
+      destinations: '@server@/monitoring/harbor/backend:@file:.ci/version@ @server@/monitoring/harbor/backend:@file:.ci/minor@ @server@/monitoring/harbor/backend:latest'
     registryLogins:
       - registryUrl: '@server_url@'
         userName: '@job_token@'
         passwordSecret: onedev-token
-    platforms: linux/amd64
     condition: SUCCESSFUL
     optional: false
-  - !BuildImageStep
+  - !BuildImageWithKanikoStep
     name: image frontend
-    buildPath: frontend
+    buildContext: frontend
     output: !RegistryOutput
-      tags: '@server_host@/monitoring/harbor/frontend:@file:.ci/version@ @server_host@/monitoring/harbor/frontend:@file:.ci/minor@ @server_host@/monitoring/harbor/frontend:latest'
+      destinations: '@server@/monitoring/harbor/frontend:@file:.ci/version@ @server@/monitoring/harbor/frontend:@file:.ci/minor@ @server@/monitoring/harbor/frontend:latest'
     registryLogins:
       - registryUrl: '@server_url@'
         userName: '@job_token@'
         passwordSecret: onedev-token
-    platforms: linux/amd64
     condition: SUCCESSFUL
     optional: false
-  - !BuildImageStep
+  - !BuildImageWithKanikoStep
     name: image flow-collector
-    buildPath: flow-collector
+    buildContext: flow-collector
     output: !RegistryOutput
-      tags: '@server_host@/monitoring/harbor/flow-collector:@file:.ci/version@ @server_host@/monitoring/harbor/flow-collector:@file:.ci/minor@ @server_host@/monitoring/harbor/flow-collector:latest'
+      destinations: '@server@/monitoring/harbor/flow-collector:@file:.ci/version@ @server@/monitoring/harbor/flow-collector:@file:.ci/minor@ @server@/monitoring/harbor/flow-collector:latest'
     registryLogins:
       - registryUrl: '@server_url@'
         userName: '@job_token@'
         passwordSecret: onedev-token
-    platforms: linux/amd64
     condition: SUCCESSFUL
     optional: false
-  - !BuildImageStep
+  - !BuildImageWithKanikoStep
     name: image awg-client
-    buildPath: awg-client
+    buildContext: awg-client
     output: !RegistryOutput
-      tags: '@server_host@/monitoring/harbor/awg-client:@file:.ci/version@ @server_host@/monitoring/harbor/awg-client:@file:.ci/minor@ @server_host@/monitoring/harbor/awg-client:latest'
+      destinations: '@server@/monitoring/harbor/awg-client:@file:.ci/version@ @server@/monitoring/harbor/awg-client:@file:.ci/minor@ @server@/monitoring/harbor/awg-client:latest'
     registryLogins:
       - registryUrl: '@server_url@'
         userName: '@job_token@'
         passwordSecret: onedev-token
-    platforms: linux/amd64
     condition: SUCCESSFUL
     optional: false
   - !CommandStep
@@ -128,7 +124,7 @@ jobs:
       commands: |
         set -eu
         V=$(cat .ci/version)
-        sh .onedev/bundle.sh "@server_host@/monitoring/harbor/" "$V" "@server_url@/@project_path@/~builds/@build_number@/artifacts"
+        sh .onedev/bundle.sh "@server@/monitoring/harbor/" "$V" "@server_url@/@project_path@/~builds/@build_number@/artifacts"
     runAs: 0:0
     useTTY: true
     condition: SUCCESSFUL
@@ -141,55 +137,35 @@ jobs:
     optional: false
   - !SetBuildDescriptionStep
     name: build description
-    buildDescription: 'Harbor @tag@: images @server_host@/monitoring/harbor/... (@tag@, latest), the deploy bundle and its notes are in the artifacts.'
+    buildDescription: 'Harbor @tag@: images @server@/monitoring/harbor/... (@tag@, latest), the deploy bundle and its notes are in the artifacts.'
     condition: SUCCESSFUL
     optional: false
-  - !RunImagetoolsStep
-    name: 'GitHub: copy image backend'
-    arguments: create --tag ghcr.io/sbrw-evc/network-control-backend:@file:.ci/version@ --tag ghcr.io/sbrw-evc/network-control-backend:@file:.ci/minor@ --tag ghcr.io/sbrw-evc/network-control-backend:latest @server_host@/monitoring/harbor/backend:@file:.ci/version@
-    registryLogins:
-      - registryUrl: '@server_url@'
-        userName: '@job_token@'
-        passwordSecret: onedev-token
-      - registryUrl: ghcr.io
-        userName: sbrw-evc
-        passwordSecret: github-token
-    condition: SUCCESSFUL
-    optional: true
-  - !RunImagetoolsStep
-    name: 'GitHub: copy image frontend'
-    arguments: create --tag ghcr.io/sbrw-evc/network-control-frontend:@file:.ci/version@ --tag ghcr.io/sbrw-evc/network-control-frontend:@file:.ci/minor@ --tag ghcr.io/sbrw-evc/network-control-frontend:latest @server_host@/monitoring/harbor/frontend:@file:.ci/version@
-    registryLogins:
-      - registryUrl: '@server_url@'
-        userName: '@job_token@'
-        passwordSecret: onedev-token
-      - registryUrl: ghcr.io
-        userName: sbrw-evc
-        passwordSecret: github-token
-    condition: SUCCESSFUL
-    optional: true
-  - !RunImagetoolsStep
-    name: 'GitHub: copy image flow-collector'
-    arguments: create --tag ghcr.io/sbrw-evc/network-control-flow-collector:@file:.ci/version@ --tag ghcr.io/sbrw-evc/network-control-flow-collector:@file:.ci/minor@ --tag ghcr.io/sbrw-evc/network-control-flow-collector:latest @server_host@/monitoring/harbor/flow-collector:@file:.ci/version@
-    registryLogins:
-      - registryUrl: '@server_url@'
-        userName: '@job_token@'
-        passwordSecret: onedev-token
-      - registryUrl: ghcr.io
-        userName: sbrw-evc
-        passwordSecret: github-token
-    condition: SUCCESSFUL
-    optional: true
-  - !RunImagetoolsStep
-    name: 'GitHub: copy image awg-client'
-    arguments: create --tag ghcr.io/sbrw-evc/network-control-awg-client:@file:.ci/version@ --tag ghcr.io/sbrw-evc/network-control-awg-client:@file:.ci/minor@ --tag ghcr.io/sbrw-evc/network-control-awg-client:latest @server_host@/monitoring/harbor/awg-client:@file:.ci/version@
-    registryLogins:
-      - registryUrl: '@server_url@'
-        userName: '@job_token@'
-        passwordSecret: onedev-token
-      - registryUrl: ghcr.io
-        userName: sbrw-evc
-        passwordSecret: github-token
+  - !CommandStep
+    name: 'GitHub: copy images'
+    runInContainer: true
+    image: gcr.io/go-containerregistry/crane:debug
+    interpreter: !PosixInterpreter
+      shell: sh
+      commands: |
+        set -eu
+        V=$(cat .ci/version)
+        M=$(cat .ci/minor)
+        crane auth login @server@ -u '@job_token@' -p '@secret:onedev-token@'
+        crane auth login ghcr.io -u sbrw-evc -p '@secret:github-token@'
+        crane copy @server@/monitoring/harbor/backend:$V ghcr.io/sbrw-evc/network-control-backend:$V
+        crane tag ghcr.io/sbrw-evc/network-control-backend:$V $M
+        crane tag ghcr.io/sbrw-evc/network-control-backend:$V latest
+        crane copy @server@/monitoring/harbor/frontend:$V ghcr.io/sbrw-evc/network-control-frontend:$V
+        crane tag ghcr.io/sbrw-evc/network-control-frontend:$V $M
+        crane tag ghcr.io/sbrw-evc/network-control-frontend:$V latest
+        crane copy @server@/monitoring/harbor/flow-collector:$V ghcr.io/sbrw-evc/network-control-flow-collector:$V
+        crane tag ghcr.io/sbrw-evc/network-control-flow-collector:$V $M
+        crane tag ghcr.io/sbrw-evc/network-control-flow-collector:$V latest
+        crane copy @server@/monitoring/harbor/awg-client:$V ghcr.io/sbrw-evc/network-control-awg-client:$V
+        crane tag ghcr.io/sbrw-evc/network-control-awg-client:$V $M
+        crane tag ghcr.io/sbrw-evc/network-control-awg-client:$V latest
+    runAs: 0:0
+    useTTY: true
     condition: SUCCESSFUL
     optional: true
   - !CommandStep
