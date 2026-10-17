@@ -106,7 +106,7 @@ class SetupGate:
 
     def announce(self) -> None:
         code = self.ensure()
-        log.warning("Network Control is not set up yet. Open the panel in a browser and enter the setup code: %s "
+        log.warning("Harbor is not set up yet. Open the panel in a browser and enter the setup code: %s "
                     "(also in %s)", code, self._path)
 
     def check(self, code: str | None, ip: str) -> None:

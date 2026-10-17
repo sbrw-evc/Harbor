@@ -130,7 +130,7 @@ async def storage(body: StorageIn, st: SetupState = Depends(code_checked)):
         "openbao": {"addr": bao.addr.rstrip("/"), "mount": mount, "approle_dir": str(st.boot.approle_dir)},
     })
     if not await st.activate():
-        raise DomainError(f"The storage is saved, but Network Control could not start on it: {st.error}")
+        raise DomainError(f"The storage is saved, but Harbor could not start on it: {st.error}")
     # The root token and the recovery key are shown once: they are kept nowhere.
     return {"stage": await st.stage(), "openbao": shown or None}
 
@@ -139,7 +139,7 @@ async def storage(body: StorageIn, st: SetupState = Depends(code_checked)):
 async def account(body: AccountIn, request: Request, response: Response, st: SetupState = Depends(code_checked)):
     if await st.stage() != STAGE_ACCOUNT:
         raise DomainError("The storage is not set up yet" if await st.stage() == STAGE_STORAGE
-                          else "Network Control is set up already")
+                          else "Harbor is set up already")
     c = st.container
     actor = Actor(SETUP_ACTOR, Role.ADMIN.value, client_ip(request))
     if body.public_base_url:

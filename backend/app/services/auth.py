@@ -1,4 +1,4 @@
-"""Sessions of Network Control and the local sign-in.
+"""Sessions of Harbor and the local sign-in.
 
 People sign in either locally (``auth_mode`` "local": a user name, a password and optionally a TOTP code) or through
 Keystone / SPA (``auth_mode`` "keystone", services/identity/spa.py). Either way the application starts its own session:
@@ -245,7 +245,7 @@ class AuthService:
     async def totp_begin(self, user: PanelUser) -> dict:
         secret = pyotp.random_base32()
         await self._store().put(TOTP_PENDING_PATH.format(user.id), {"secret": secret})
-        uri = pyotp.TOTP(secret).provisioning_uri(name=user.username, issuer_name="Network Control")
+        uri = pyotp.TOTP(secret).provisioning_uri(name=user.username, issuer_name="Harbor")
 
         def render() -> str:
             buf = io.BytesIO()

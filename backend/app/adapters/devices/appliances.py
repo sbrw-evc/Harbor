@@ -280,7 +280,7 @@ class FortigateDriver(HttpApiDriver):
             return "Collector set; enable netflow-sampler / sflow-sampler on the interfaces you need"
         elif action == "reboot":
             try:
-                await self._send("POST", "/api/v2/monitor/system/os/reboot", {"event_log_message": "Network Control"})
+                await self._send("POST", "/api/v2/monitor/system/os/reboot", {"event_log_message": "Harbor"})
             except ExternalServiceError:
                 pass
             return "Reboot started"

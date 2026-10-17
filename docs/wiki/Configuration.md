@@ -1,6 +1,6 @@
 # Configuration
 
-Network Control is configured in the panel: the **setup wizard** on the first start, then the **Settings** page.
+Harbor is configured in the panel: the **setup wizard** on the first start, then the **Settings** page.
 Settings are stored in PostgreSQL and picked up by all processes within 15 seconds — no restart.
 
 ## `.env`
@@ -22,7 +22,7 @@ the log asks to remove them.
 
 ## Setup wizard
 
-Opens by itself while Network Control is not set up. Every step asks for the **setup code**, printed by `install.sh`
+Opens by itself while Harbor is not set up. Every step asks for the **setup code**, printed by `install.sh`
 and in `docker compose logs backend` (also `data/backend/setup-code`); it disappears when the wizard is done.
 
 1. **Storage** — PostgreSQL (TimescaleDB), ClickHouse and OpenBao. The bundled services are filled in. OpenBao of the
@@ -31,7 +31,7 @@ and in `docker compose logs backend` (also `data/backend/setup-code`); it disapp
    The result is `data/backend/bootstrap.json` (addresses and user names, no password) and `data/backend/approle/`
    (the only secret on disk); passwords go to OpenBao (`infra/postgres`, `infra/clickhouse`).
 2. **Sign-in** — the address of the panel and how people sign in:
-   - **Users of Network Control** — a standalone installation: the first administrator is created here; passwords
+   - **Users of Harbor** — a standalone installation: the first administrator is created here; passwords
      (argon2id) and TOTP secrets are kept in OpenBao (`local/users/<id>`), never in PostgreSQL;
    - **Keystone** — the connection key `spa1.…` (see below); somebody must have the `admin` role of the application.
 

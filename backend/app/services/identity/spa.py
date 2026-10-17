@@ -1,6 +1,6 @@
 """The SPA client (docs: SPA repository, docs/protocol.md). SPA — Single Point of Authorization — is the only place
 where people authenticate (passwords, passkeys, MFA, directories, external providers) and where their roles in
-Network Control are decided. Network Control:
+Harbor are decided. Harbor:
 
 * sends people to SPA to sign in (OpenID Connect, authorization code flow with PKCE S256, nonce and signed state) and
   starts its own session after the callback;
@@ -57,7 +57,7 @@ MODE_KEYSTONE = "keystone"
 # Before SPA, the TOTP secrets of local users were kept in OpenBao at users/<id>/totp.
 LEGACY_TOTP = "users/{}/totp"
 
-# The fixed role catalogue of Network Control, published to SPA; SPA administrators assign these roles.
+# The fixed role catalogue of Harbor, published to SPA; SPA administrators assign these roles.
 ROLE_CATALOGUE = [
     {"id": Role.ADMIN.value, "name": "Administrator",
      "description": "Everything: VPN server, routing, devices, API tokens, audit log, backups and settings"},
@@ -111,7 +111,7 @@ def parse_key(raw: str, source: str = "env") -> Connection:
 
 
 def role_of(roles: list[str]) -> Role | None:
-    """The strongest role of Network Control among the role IDs SPA gives; None when there is none."""
+    """The strongest role of Harbor among the role IDs SPA gives; None when there is none."""
     known = [Role(r) for r in roles if r in {x.value for x in Role}]
     return max(known, key=_RANK.index) if known else None
 
@@ -391,7 +391,7 @@ class SpaService:
         async with self._db.session() as s:
             user, _, _ = await self._apply(s, ident, now=utcnow())
             if not user.is_active:
-                raise SignInError("access_denied", "You have no role in Network Control. Ask an SPA administrator for access.")
+                raise SignInError("access_denied", "You have no role in Harbor. Ask an SPA administrator for access.")
             user_id = user.id
         amr = ",".join(oidc.strings(claims.get("amr")))
         token = await self._auth.start_session(user_id, ip, user_agent, method="spa", amr=amr)

@@ -6,7 +6,7 @@ export type Range = "1h" | "24h" | "7d" | "30d" | "90d";
 /** How people sign in: local users of the panel, or Keystone (SPA). */
 export type AuthMode = "local" | "keystone";
 
-/** A person who may use Network Control: a local user (password and TOTP kept in OpenBao) or a record synchronised from
+/** A person who may use Harbor: a local user (password and TOTP kept in OpenBao) or a record synchronised from
  * Keystone (SPA). */
 export interface PanelUser {
   id: number;

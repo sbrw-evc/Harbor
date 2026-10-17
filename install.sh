@@ -1,5 +1,5 @@
 #!/bin/sh
-# Installs or updates Network Control. The first run creates .env with random passwords for the bundled PostgreSQL and
+# Installs or updates Harbor. The first run creates .env with random passwords for the bundled PostgreSQL and
 # ClickHouse, prepares the data folders and starts everything; the rest is done in the setup wizard of the panel.
 set -eu
 cd "$(dirname "$0")"
@@ -34,11 +34,11 @@ PORT=$(sed -n 's/^PANEL_PORT=//p' .env); PORT=${PORT:-8080}
 ADDR=$(hostname -I 2>/dev/null | awk '{print $1}')
 echo
 if [ -s data/backend/bootstrap.json ]; then
-  echo "Network Control is running: http://${ADDR:-localhost}:$PORT"
+  echo "Harbor is running: http://${ADDR:-localhost}:$PORT"
   exit 0
 fi
 for _ in $(seq 1 30); do [ -s data/backend/setup-code ] && break; sleep 2; done
-echo "Network Control is running. Open http://${ADDR:-localhost}:$PORT and finish the setup wizard."
+echo "Harbor is running. Open http://${ADDR:-localhost}:$PORT and finish the setup wizard."
 echo
 echo "  Setup code:           $(cat data/backend/setup-code 2>/dev/null || echo '(see: docker compose logs backend)')"
 echo "  PostgreSQL password:  $(sed -n 's/^POSTGRES_PASSWORD=//p' .env)"

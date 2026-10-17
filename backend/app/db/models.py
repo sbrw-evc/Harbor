@@ -22,7 +22,7 @@ class TimestampMixin:
 
 
 class PanelUser(TimestampMixin, Base):
-    """A person who may use Network Control: a local user (source "local", signs in with a password kept in OpenBao)
+    """A person who may use Harbor: a local user (source "local", signs in with a password kept in OpenBao)
     or a record synchronised from Keystone / SPA (source "spa", external_id = the SPA user ID). When the panel moves to
     Keystone, local records are bound to SPA once by username. Nothing secret is kept here: password hashes and TOTP
     secrets are in OpenBao (services/auth.py)."""

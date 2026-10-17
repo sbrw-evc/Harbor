@@ -15,14 +15,14 @@ export const SPA_PROTOCOL_URL = "https://github.com/sbrw-evc/SPA-Single-point-of
 /** Messages for the `sso_error` codes the callback sends back here. */
 function errorText(code: string, description: string | null): { title: string; detail: string | null } {
   if (code === "access_denied")
-    return { title: t("You have no role in Network Control. Ask an SPA administrator for access."), detail: null };
+    return { title: t("You have no role in Harbor. Ask an SPA administrator for access."), detail: null };
   if (code === "invalid_state")
     return { title: t("The sign-in took too long or was started in another browser. Try again."), detail: null };
   if (code === "unavailable") return { title: t("SPA is not available"), detail: description ? tServer(description) : null };
   return { title: t("Sign-in failed"), detail: description ? tServer(description) : code };
 }
 
-/** How to connect Network Control to SPA (shown while it is not connected). */
+/** How to connect Harbor to SPA (shown while it is not connected). */
 export function ConnectInstructions({ error }: { error?: string | null }) {
   const origin = window.location.origin;
   return (
@@ -30,7 +30,7 @@ export function ConnectInstructions({ error }: { error?: string | null }) {
       {error && <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-red-200">{tServer(error)}</div>}
       <ol className="list-decimal space-y-2 pl-5">
         <li>
-          {t("In SPA, open Applications → Connect an application, choose the type Network Control and enter the address of this application:")}{" "}
+          {t("In SPA, open Applications → Connect an application, choose the type Harbor and enter the address of this application:")}{" "}
           <code className="mono break-all text-slate-100">{origin}</code>
           <div className="mt-1 text-xs text-slate-500">{t("Redirect address:")} <code className="mono break-all">{origin}/api/auth/spa/callback</code></div>
         </li>
@@ -161,7 +161,7 @@ export default function LoginPage() {
             <Activity className="text-white" size={22} />
           </div>
           <div>
-            <div className="text-lg font-semibold text-slate-100">Network Control</div>
+            <div className="text-lg font-semibold text-slate-100">Harbor</div>
             <div className="text-xs text-slate-400">{t("VPN and network control panel")}</div>
           </div>
         </div>
@@ -172,7 +172,7 @@ export default function LoginPage() {
           </div>
         ) : config.isError ? (
           <div className="space-y-4">
-            <div className="flex items-start gap-2 text-sm text-red-300"><AlertTriangle size={16} className="mt-0.5 shrink-0" /> {t("Network Control is not available. Try again in a minute.")}</div>
+            <div className="flex items-start gap-2 text-sm text-red-300"><AlertTriangle size={16} className="mt-0.5 shrink-0" /> {t("Harbor is not available. Try again in a minute.")}</div>
             <button className="btn-ghost w-full" onClick={() => config.refetch()}>{t("Try again")}</button>
           </div>
         ) : local ? (
@@ -186,7 +186,7 @@ export default function LoginPage() {
               <PlugZap size={18} className="mt-0.5 shrink-0 text-amber-400" />
               <div>
                 <div className="font-semibold text-slate-100">{t("This application is not connected to SPA")}</div>
-                <div className="mt-1 text-sm text-slate-400">{t("Sign-in and access to Network Control are managed in SPA — Single Point of Authorization. To connect:")}</div>
+                <div className="mt-1 text-sm text-slate-400">{t("Sign-in and access to Harbor are managed in SPA — Single Point of Authorization. To connect:")}</div>
               </div>
             </div>
             <ConnectInstructions error={config.data?.error} />

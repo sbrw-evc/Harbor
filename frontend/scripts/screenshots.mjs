@@ -1,4 +1,4 @@
-// README screenshots of the main features in the light and the dark theme, taken from a running Network Control:
+// README screenshots of the main features in the light and the dark theme, taken from a running Harbor:
 // the sign-in page, then a real sign-in through SPA and the overview, devices, network map, flow analysis and VPN
 // clients. Start the demo first (scripts/screenshots.sh does all of it), then:
 //
@@ -62,7 +62,7 @@ async function shoot(browser, theme) {
   await settle(page, 800);
   await page.screenshot({ path: join(OUT, `sign-in${suffix}.png`) });
 
-  // The real sign-in: Network Control → SPA (authorization code with PKCE) → back with a session.
+  // The real sign-in: Harbor → SPA (authorization code with PKCE) → back with a session.
   await Promise.all([
     page.waitForURL((u) => new URL(u).pathname === "/", { timeout: 20_000, waitUntil: "domcontentloaded" }),
     page.locator("button.btn-primary").first().click({ noWaitAfter: true }),

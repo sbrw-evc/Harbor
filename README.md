@@ -1,6 +1,11 @@
-# Network Control
+# Harbor
 
 **English** · [Русский](README.ru.md)
+
+*Formerly Network Control.* Harbor is the network of one home or small office in one place: the gateway with its
+VPN and selective routing, the devices, the clients and the traffic. It stands on its own (its own users) or signs
+people in through [Keystone](https://github.com/sbrw-evc/Keystone), next to the applications of the family —
+Ledger (inventory), Beacon (incidents) and Current (the network of an organisation).
 
 A control panel for a home or corporate network: **network devices** of 25+ platforms with settings from the panel,
 a **live network map** down to every phone and TV, **flow analytics** (NetFlow / IPFIX / sFlow → ClickHouse) with
@@ -117,7 +122,7 @@ sign-in. `.env` keeps only the passwords of the bundled databases, the version a
 
 ### Two ways to sign in
 
-- **Users of Network Control** — a standalone installation: the first administrator is created in the wizard; passwords
+- **Users of Harbor** — a standalone installation: the first administrator is created in the wizard; passwords
   (argon2id) and TOTP secrets are kept in OpenBao, never in PostgreSQL.
 - **Keystone** — [SPA / Keystone](https://github.com/sbrw-evc/SPA-Single-point-of-authorization-) (OpenID Connect)
   signs people in and decides their roles (`admin`, `operator`, `viewer`); the panel synchronises them every 5 minutes.
@@ -169,6 +174,18 @@ DEMO_DATABASE_URL=postgresql+asyncpg://user:pass@127.0.0.1:5432/nc_demo ./script
 
 Structure, principles and API — see [Wiki → Development](https://github.com/sbrw-evc/Network-Control/wiki/Development).
 Interactive API documentation is available at `/api/docs`.
+
+## Compatibility after the rename
+
+Identifiers on the wire and on disk keep the old spelling, so existing installations and Keystone connections keep
+working:
+
+| Kept | Where |
+|---|---|
+| `network-control` | the application type in Keystone, the compose project, the image names `ghcr.io/sbrw-evc/network-control-*`, the repository |
+| `nc-*`, `nc_*` | container names, the session cookie `nc_session`, browser storage keys |
+| `X-Requested-With: network-control` | the CSRF check of the API |
+| `amnezia` | the PostgreSQL database and user, the OpenBao KV mount |
 
 ## License
 

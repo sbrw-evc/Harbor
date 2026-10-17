@@ -21,7 +21,7 @@ async def _storage():
     if not boot.exists():
         await boot.import_legacy(legacy_environ())
     if not boot.exists():
-        raise SystemExit("Network Control is not set up yet: finish the setup wizard first")
+        raise SystemExit("Harbor is not set up yet: finish the setup wizard first")
     st = await boot.resolve()
     db = Database(st.database_url)
     await db.create_schema()

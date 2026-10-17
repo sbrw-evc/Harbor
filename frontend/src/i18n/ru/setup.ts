@@ -8,8 +8,8 @@ export default {
   "Sign-in": "Вход",
   "Continue": "Продолжить",
   "Loading…": "Загрузка…",
-  "Network Control is not set up yet. Enter the one-time setup code: install.sh printed it, and it is in the log of the backend.":
-    "Network Control ещё не настроен. Введите одноразовый код установки: его напечатал install.sh, и он есть в журнале backend.",
+  "Harbor is not set up yet. Enter the one-time setup code: install.sh printed it, and it is in the log of the backend.":
+    "Harbor ещё не настроен. Введите одноразовый код установки: его напечатал install.sh, и он есть в журнале backend.",
   "works": "работает",
   "works, version {v}": "работает, версия {v}",
   "OpenBao is initialised. Save its root token and recovery key now, in a password manager: they are shown once and kept nowhere. They are needed to restore OpenBao or to administer it by hand.":
@@ -17,8 +17,8 @@ export default {
   "Root token": "Root-токен",
   "Recovery key": "Ключ восстановления",
   "I have saved the root token and the recovery key": "Я сохранил root-токен и ключ восстановления",
-  "Where Network Control keeps its data. The values of the bundled services are filled in; install.sh printed their passwords. Passwords are kept in OpenBao, not on disk.":
-    "Где Network Control хранит данные. Значения встроенных сервисов уже заполнены, их пароли напечатал install.sh. Пароли хранятся в OpenBao, а не на диске.",
+  "Where Harbor keeps its data. The values of the bundled services are filled in; install.sh printed their passwords. Passwords are kept in OpenBao, not on disk.":
+    "Где Harbor хранит данные. Значения встроенных сервисов уже заполнены, их пароли напечатал install.sh. Пароли хранятся в OpenBao, а не на диске.",
   "Host": "Хост",
   "Port": "Порт",
   "Database": "База данных",
@@ -37,7 +37,7 @@ export default {
   "Address of the panel": "Адрес панели",
   "How people and Keystone reach it, e.g. https://nc.example.com": "По нему панель открывают люди и Keystone, например https://nc.example.com",
   "How people sign in": "Как люди входят",
-  "Users of Network Control": "Пользователи Network Control",
+  "Users of Harbor": "Пользователи Harbor",
   "A standalone installation: passwords and two-factor codes are kept in OpenBao. Keystone can be connected later, with the users moved there.":
     "Самостоятельная установка: пароли и коды двухфакторной аутентификации хранятся в OpenBao. Keystone можно подключить позже и перенести туда пользователей.",
   "Keystone (single sign-on)": "Keystone (единый вход)",
@@ -47,8 +47,8 @@ export default {
   "at least 10 characters, mixed case or digits": "не короче 10 символов, буквы разного регистра или цифры",
   "Repeat": "Повторите",
   "the passwords differ": "пароли не совпадают",
-  "In Keystone open Applications → Connect an application, type Network Control, address of the panel:":
-    "В Keystone откройте «Приложения → Подключить приложение», тип Network Control, адрес панели:",
+  "In Keystone open Applications → Connect an application, type Harbor, address of the panel:":
+    "В Keystone откройте «Приложения → Подключить приложение», тип Harbor, адрес панели:",
   "Address after sign-out:": "Адрес после выхода:",
   "Give yourself the role admin: without an administrator in Keystone the panel refuses the connection.":
     "Назначьте себе роль admin: без администратора в Keystone панель не примет подключение.",
@@ -181,8 +181,8 @@ export default {
 
   // First steps
   "Set up the sign-in": "Настройте вход",
-  "Users of the panel need an administrator; with Keystone, the connection must work and somebody must have the Administrator role of Network Control there. Keystone can be connected later, with the local users moved there.":
-    "Для пользователей панели нужен администратор; с Keystone подключение должно работать, и у кого-то там должна быть роль «Администратор» Network Control. Keystone можно подключить позже и перенести туда локальных пользователей.",
+  "Users of the panel need an administrator; with Keystone, the connection must work and somebody must have the Administrator role of Harbor there. Keystone can be connected later, with the local users moved there.":
+    "Для пользователей панели нужен администратор; с Keystone подключение должно работать, и у кого-то там должна быть роль «Администратор» Harbor. Keystone можно подключить позже и перенести туда локальных пользователей.",
   "Open the sign-in settings": "Открыть настройки входа",
   "Connect the router": "Подключите роутер",
   "Enter the address of the MikroTik, add the SSH key of the panel to it and check the connection: the router must answer polls.":
@@ -200,13 +200,13 @@ export default {
     "Адрес панели (карточка «Панель» на этой странице) должен быть адресом, который открывают люди, а не localhost; изменение применяется сразу.",
 
   // Messages of the server
-  "Network Control is not set up yet: open the panel and finish the setup wizard": "Network Control ещё не настроен: откройте панель и пройдите мастер первичной настройки",
+  "Harbor is not set up yet: open the panel and finish the setup wizard": "Harbor ещё не настроен: откройте панель и пройдите мастер первичной настройки",
   "Wrong setup code: it is in the log of the backend container (docker compose logs backend)": "Неверный код установки: он есть в журнале контейнера backend (docker compose logs backend)",
   "Too many wrong setup codes. Wait ten minutes.": "Слишком много неверных кодов установки. Подождите десять минут.",
   "The storage is set up already": "Хранилища уже настроены",
   "The storage is not set up yet": "Хранилища ещё не настроены",
-  "Network Control is set up already": "Network Control уже настроен",
-  "The storage is saved, but Network Control could not start on it: {e}": "Хранилища сохранены, но Network Control не смог на них запуститься: {e}",
+  "Harbor is set up already": "Harbor уже настроен",
+  "The storage is saved, but Harbor could not start on it: {e}": "Хранилища сохранены, но Harbor не смог на них запуститься: {e}",
   "Enter the AppRole role_id and secret_id of the external OpenBao": "Укажите role_id и secret_id AppRole внешнего OpenBao",
   "OpenBao is initialised already: enter its root token (shown when it was initialised; for an old installation in data/bao-init/init.json)":
     "OpenBao уже инициализирован: введите его root-токен (показывался при инициализации; у старой установки — в data/bao-init/init.json)",

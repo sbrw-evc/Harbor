@@ -11,7 +11,7 @@ export interface StepText {
 export const CHECKLIST: Record<string, StepText> = {
   spa: {
     title: k("Set up the sign-in"),
-    text: k("Users of the panel need an administrator; with Keystone, the connection must work and somebody must have the Administrator role of Network Control there. Keystone can be connected later, with the local users moved there."),
+    text: k("Users of the panel need an administrator; with Keystone, the connection must work and somebody must have the Administrator role of Harbor there. Keystone can be connected later, with the local users moved there."),
     go: k("Open the sign-in settings"),
   },
   router: {

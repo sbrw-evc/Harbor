@@ -39,7 +39,7 @@ function Shell({ children, wide }: { children: ReactNode; wide?: boolean }) {
             <Activity className="text-white" size={22} />
           </div>
           <div>
-            <div className="text-lg font-semibold text-slate-100">Network Control</div>
+            <div className="text-lg font-semibold text-slate-100">Harbor</div>
             <div className="text-xs text-slate-400">{t("Setup wizard")}</div>
           </div>
         </div>
@@ -92,7 +92,7 @@ function CodeStep({ onDone }: { onDone: (code: string) => void }) {
   };
   return (
     <form onSubmit={submit} className="space-y-4">
-      <p className="text-sm text-slate-300">{t("Network Control is not set up yet. Enter the one-time setup code: install.sh printed it, and it is in the log of the backend.")}</p>
+      <p className="text-sm text-slate-300">{t("Harbor is not set up yet. Enter the one-time setup code: install.sh printed it, and it is in the log of the backend.")}</p>
       <pre className="mono overflow-x-auto rounded-lg bg-base-900 px-3 py-2 text-xs text-slate-300">docker compose logs backend | grep "setup code"</pre>
       <Field label={t("Setup code")}>
         <input className="input mono text-center text-lg tracking-[.25em]" autoFocus value={code} maxLength={20}
@@ -176,7 +176,7 @@ function StorageStep({ code, onDone }: { code: string; onDone: () => void }) {
 
   return (
     <form className="space-y-5" onSubmit={(e) => { e.preventDefault(); run("save"); }}>
-      <p className="text-sm text-slate-400">{t("Where Network Control keeps its data. The values of the bundled services are filled in; install.sh printed their passwords. Passwords are kept in OpenBao, not on disk.")}</p>
+      <p className="text-sm text-slate-400">{t("Where Harbor keeps its data. The values of the bundled services are filled in; install.sh printed their passwords. Passwords are kept in OpenBao, not on disk.")}</p>
       <fieldset className="space-y-3">
         <legend className="mb-2 flex items-center gap-2 font-medium text-slate-200"><Database size={15} /> PostgreSQL (TimescaleDB)</legend>
         <div className="grid gap-3 sm:grid-cols-4">
@@ -274,7 +274,7 @@ function AccountStep({ code }: { code: string }) {
       </Field>
       <div className="space-y-2">
         <div className="text-sm font-medium text-slate-200">{t("How people sign in")}</div>
-        <Radio checked={mode === "local"} onChange={() => setMode("local")} label={t("Users of Network Control")}
+        <Radio checked={mode === "local"} onChange={() => setMode("local")} label={t("Users of Harbor")}
           hint={t("A standalone installation: passwords and two-factor codes are kept in OpenBao. Keystone can be connected later, with the users moved there.")} />
         <Radio checked={mode === "keystone"} onChange={() => setMode("keystone")} label={t("Keystone (single sign-on)")}
           hint={t("People and roles are managed in Keystone; the panel synchronises them.")} />
@@ -290,7 +290,7 @@ function AccountStep({ code }: { code: string }) {
       ) : (
         <div className="space-y-3 text-sm text-slate-300">
           <ol className="list-decimal space-y-2 pl-5">
-            <li>{t("In Keystone open Applications → Connect an application, type Network Control, address of the panel:")} <code className="mono break-all text-slate-100">{base}</code>
+            <li>{t("In Keystone open Applications → Connect an application, type Harbor, address of the panel:")} <code className="mono break-all text-slate-100">{base}</code>
               {hint.data && <div className="mt-1 space-y-0.5 text-xs text-slate-500">
                 <div>{t("Redirect address:")} <code className="mono break-all">{hint.data.redirect_uri}</code></div>
                 <div>{t("Address after sign-out:")} <code className="mono break-all">{hint.data.post_logout_uri}</code></div>

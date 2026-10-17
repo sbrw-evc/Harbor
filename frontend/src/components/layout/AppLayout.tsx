@@ -22,7 +22,7 @@ export function Brand({ compact }: { compact?: boolean }) {
       <motion.span whileHover={{ rotate: -8, scale: 1.05 }} className="grid h-8 w-8 place-items-center rounded-[9px] bg-red-600 text-white shadow-sm">
         <Activity size={18} strokeWidth={2.4} />
       </motion.span>
-      {!compact && <span className="text-[15px] font-semibold tracking-tight text-slate-100">Network Control</span>}
+      {!compact && <span className="text-[15px] font-semibold tracking-tight text-slate-100">Harbor</span>}
     </Link>
   );
 }

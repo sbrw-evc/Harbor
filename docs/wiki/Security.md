@@ -2,14 +2,14 @@
 
 ## Sign-in and access are managed in SPA
 
-Network Control keeps no passwords, password policy, passkeys or directory settings. People sign in through
+Harbor keeps no passwords, password policy, passkeys or directory settings. People sign in through
 **SPA — Single Point of Authorization** ([repository](https://github.com/sbrw-evc/SPA-Single-point-of-authorization-), [protocol](https://github.com/sbrw-evc/SPA-Single-point-of-authorization-/blob/main/docs/protocol.md)): passwords, passkeys, MFA,
 LDAP / Active Directory, Entra ID and other providers live there, and SPA administrators decide who gets which role in
-Network Control.
+Harbor.
 
 - Sign-in: OpenID Connect authorization code flow with PKCE (S256), nonce and a signed single-use state; the verifier
   is kept in an HttpOnly `SameSite=Lax` cookie on `/api/auth/spa/` for 10 minutes. The ID token is verified with SPA's
-  JWKS (RS256, `iss`, `aud`, `exp`, `nonce`). After the callback Network Control starts its own session.
+  JWKS (RS256, `iss`, `aud`, `exp`, `nonce`). After the callback Harbor starts its own session.
 - Users are records synchronised from SPA every 5 minutes (on the leader) and on **Synchronize now**: created, updated
   (name, e-mail, groups, role) and disabled. A person SPA disables or no longer lists loses all sessions and API tokens
   at once. Records from before SPA are bound to SPA once by username at the first sync or sign-in (then by SPA ID

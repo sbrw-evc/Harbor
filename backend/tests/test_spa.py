@@ -286,7 +286,7 @@ def test_access_denied_and_errors(env):
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app=e.app), base_url=APP) as client:
             r = await sign_in(e, client)
             assert r.status_code == 302 and r.headers["location"].startswith("/login?sso_error=access_denied")
-            # A role SPA gives but Network Control does not know is no access either.
+            # A role SPA gives but Harbor does not know is no access either.
             e.fake.add_user("usr_u", "unknown", ["superuser"])
             e.fake.signed_in = "usr_u"
             r = await sign_in(e, client)
@@ -364,7 +364,7 @@ def test_sync_creates_updates_binds_and_disables(env):
             assert not (await UserRepo(s).by_external("spa", "usr_e")).is_active
 
         st = await e.spa.status()
-        assert st["application"] == "Network Control" and st["account_url"] == f"{ISSUER}/profile"
+        assert st["application"] == "Harbor" and st["account_url"] == f"{ISSUER}/profile"
         assert st["last_sync_at"] and st["error"] is None and st["counts"]["active"] == 1
         assert st["roles_published_at"]
         actions = await audit_actions(e.db)

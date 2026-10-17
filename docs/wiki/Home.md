@@ -1,8 +1,8 @@
-# Network Control
+# Harbor
 
 **English** · [[Русский|ru-Home]]
 
-**Network Control** manages a home or corporate network: devices of 25+ platforms (MikroTik, TP-Link / Omada, UniFi,
+**Harbor** manages a home or corporate network: devices of 25+ platforms (MikroTik, TP-Link / Omada, UniFi,
 Keenetic, OpenWrt, OPNsense, pfSense, Cisco, HP / Aruba, Dell, Zyxel, Juniper, Huawei, FortiGate, Eltex, SNMP), a live
 network map with every client, flow analytics with detection rules and threat intelligence — together with a
 self-hosted AmneziaWG VPN and selective routing (sites from a list go through the tunnel, the rest goes through the ISP).
@@ -35,7 +35,7 @@ self-hosted AmneziaWG VPN and selective routing (sites from a list go through th
  LAN devices ──► MikroTik ──(dst ∈ vpn-sites)──► gateway (LXC/VM with Docker) ──awg0──► Amnezia server (VPS)
                     │  └──(everything else)──► ISP
                     └── NetFlow / IPFIX / sFlow (any device) ──► flow-collector ──► ClickHouse
- browser ──► Network Control (nginx → FastAPI) ──► PostgreSQL · OpenBao · ClickHouse · SSH to VPS and MikroTik
+ browser ──► Harbor (nginx → FastAPI) ──► PostgreSQL · OpenBao · ClickHouse · SSH to VPS and MikroTik
 ```
 
 ## Key features

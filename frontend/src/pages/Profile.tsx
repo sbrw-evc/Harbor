@@ -102,7 +102,7 @@ export default function Profile() {
         {local ? <LocalSecurity /> : <Card title={<span className="flex items-center gap-2"><ShieldCheck size={14} /> {t("Account and security")}</span>}>
           <div className="space-y-3">
             <p className="text-sm text-slate-400">
-              {t("Your account, password, passkeys and two-factor authentication are managed in SPA — Single Point of Authorization. Your role in Network Control is given there by an SPA administrator.")}
+              {t("Your account, password, passkeys and two-factor authentication are managed in SPA — Single Point of Authorization. Your role in Harbor is given there by an SPA administrator.")}
             </p>
             {account ? (
               <a className="btn-primary" href={account} target="_blank" rel="noreferrer"><ExternalLink size={15} /> {t("Open account and security in SPA")}</a>

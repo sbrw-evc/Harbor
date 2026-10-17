@@ -1,4 +1,4 @@
-"""Network Control with demo data, for screenshots and trying the UI without a network to manage.
+"""Harbor with demo data, for screenshots and trying the UI without a network to manage.
 
 The real application (app.main) runs against a real PostgreSQL; only the systems around it are stand-ins:
 
