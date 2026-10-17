@@ -19,7 +19,7 @@ QR-коды и одноразовые ссылки работают так же,
 
 | Объект | Значение |
 |---|---|
-| Интерфейс WireGuard | `wg-ac`, порт `51820/udp`, MTU 1420, комментарий `amnezia-control` |
+| Интерфейс WireGuard | `wg-ac`, порт `51820/udp`, MTU 1420, комментарий `network-control` |
 | Адрес | `10.9.0.1/24` на `wg-ac` |
 | Firewall input | `amnezia: wireguard` (UDP 51820), `amnezia: wireguard dns udp/tcp` (DNS с `wg-ac`) |
 | Mangle | `amnezia: mark new wg conns to vpn-sites`, `amnezia: route wg conns via tunnel` |
@@ -43,7 +43,7 @@ QR-коды и одноразовые ссылки работают так же,
 
 **Клиенты VPN → Новый клиент → VPN-сервер: MikroTik (WireGuard)**. Панель генерирует ключи и отдельный
 preshared key (оба хранятся в OpenBao), выделяет следующий свободный адрес в `10.9.0.0/24` и добавляет пир
-с комментарием `amnezia-control: <имя>`. Пиры, добавленные на роутере вручную, импортируются кнопкой
+с комментарием `network-control: <имя>`. Пиры, добавленные на роутере вручную, импортируются кнопкой
 **Синхронизировать** (без закрытого ключа — перевыпустите ключи, чтобы получить конфиг).
 
 ## Трафик
@@ -54,5 +54,5 @@ preshared key (оба хранятся в OpenBao), выделяет следу�
 
 ## Откат
 
-`mikrotik/amnezia-control-remove.rsc` удаляет интерфейс WireGuard, его пиры, адрес и правила вместе с остальными
+`mikrotik/network-control-remove.rsc` удаляет интерфейс WireGuard, его пиры, адрес и правила вместе с остальными
 объектами панели.

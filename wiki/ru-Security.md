@@ -3,7 +3,7 @@
 ## Вход и доступ управляются в SPA
 
 Harbor не хранит паролей, парольной политики, ключей доступа и настроек каталогов. Вход — через
-**SPA — единую точку авторизации** ([репозиторий](https://github.com/sbrw-evc/SPA-Single-point-of-authorization-), [протокол](https://github.com/sbrw-evc/SPA-Single-point-of-authorization-/blob/main/docs/protocol.md)): пароли, ключи доступа, MFA,
+**SPA — единую точку авторизации** ([репозиторий](https://onedev.evcsbrw.ru/Monitoring/Keystone), [протокол](https://onedev.evcsbrw.ru/Monitoring/Keystone/~files/main/docs/protocol.md)): пароли, ключи доступа, MFA,
 LDAP / Active Directory, Entra ID и другие провайдеры находятся там, и роли в Harbor назначают администраторы SPA.
 
 - Вход: OpenID Connect, authorization code flow с PKCE (S256), nonce и подписанным одноразовым state; verifier хранится

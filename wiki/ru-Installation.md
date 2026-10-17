@@ -33,7 +33,7 @@ sysctl -p /etc/sysctl.d/99-gw.conf
 ## Установка панели
 
 ```bash
-git clone https://github.com/sbrw-evc/Network-Control.git /opt/network-control
+git clone https://onedev.evcsbrw.ru/Monitoring/Harbor /opt/network-control
 cd /opt/network-control
 ./install.sh
 ```

@@ -1,12 +1,12 @@
 # MikroTik setup
 
-`mikrotik/amnezia-control.rsc` configures policy routing and NetFlow export. Edit the variables at the top
+`mikrotik/network-control.rsc` configures policy routing and NetFlow export. Edit the variables at the top
 (`gateway`, `tunnelProbe`, `lanIface`, `wanIface`, `flowPort`), upload the file to the router and import it:
 
 ```
 /export file=before-amnezia
 /system backup save name=before-amnezia
-/import file-name=amnezia-control.rsc
+/import file-name=network-control.rsc
 ```
 
 ## What gets created
@@ -41,7 +41,7 @@ Traffic Flow adds CPU load; on weak switches (CRS3xx) keep an eye on `cpu-load`.
 ## Rollback
 
 ```
-/import file-name=amnezia-control-remove.rsc
+/import file-name=network-control-remove.rsc
 ```
 
 or `/system backup load name=before-amnezia`.

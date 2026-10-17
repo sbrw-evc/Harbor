@@ -3,7 +3,7 @@
 ## Sign-in and access are managed in SPA
 
 Harbor keeps no passwords, password policy, passkeys or directory settings. People sign in through
-**SPA — Single Point of Authorization** ([repository](https://github.com/sbrw-evc/SPA-Single-point-of-authorization-), [protocol](https://github.com/sbrw-evc/SPA-Single-point-of-authorization-/blob/main/docs/protocol.md)): passwords, passkeys, MFA,
+**SPA — Single Point of Authorization** ([repository](https://onedev.evcsbrw.ru/Monitoring/Keystone), [protocol](https://onedev.evcsbrw.ru/Monitoring/Keystone/~files/main/docs/protocol.md)): passwords, passkeys, MFA,
 LDAP / Active Directory, Entra ID and other providers live there, and SPA administrators decide who gets which role in
 Harbor.
 

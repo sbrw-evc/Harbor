@@ -19,7 +19,7 @@ Open **VPN on MikroTik** and press **Set up on MikroTik** (administrator). The p
 
 | Object | Value |
 |---|---|
-| WireGuard interface | `wg-ac`, port `51820/udp`, MTU 1420, comment `amnezia-control` |
+| WireGuard interface | `wg-ac`, port `51820/udp`, MTU 1420, comment `network-control` |
 | Address | `10.9.0.1/24` on `wg-ac` |
 | Firewall input | `amnezia: wireguard` (UDP 51820), `amnezia: wireguard dns udp/tcp` (DNS from `wg-ac`) |
 | Mangle | `amnezia: mark new wg conns to vpn-sites`, `amnezia: route wg conns via tunnel` |
@@ -44,7 +44,7 @@ Changes apply to configs downloaded afterwards; already issued configs keep the 
 
 **VPN clients → New client → VPN server: MikroTik (WireGuard)**. The panel generates the keys and a per-client
 preshared key (both are stored in OpenBao), allocates the next free address in `10.9.0.0/24` and adds the peer
-with the comment `amnezia-control: <name>`. Peers added on the router manually are imported by **Synchronize**
+with the comment `network-control: <name>`. Peers added on the router manually are imported by **Synchronize**
 (without a private key — reissue keys to get a config).
 
 ## Traffic
@@ -55,5 +55,5 @@ of the flow collector.
 
 ## Rollback
 
-`mikrotik/amnezia-control-remove.rsc` removes the WireGuard interface, its peers, address and rules along with the rest
+`mikrotik/network-control-remove.rsc` removes the WireGuard interface, its peers, address and rules along with the rest
 of the panel objects.
