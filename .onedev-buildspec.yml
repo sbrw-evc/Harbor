@@ -75,9 +75,7 @@ jobs:
       shell: sh
       commands: |
         set -eu
-        apt-get update -qq && apt-get install -y -qq --no-install-recommends openssh-client >/dev/null
-        pip install -q --no-cache-dir -r backend/requirements.txt -r backend/requirements-dev.txt
-        cd backend && python -m pytest -q -p no:cacheprovider --cov=app --cov-report=xml:coverage.xml tests
+        sh .onedev/backend-tests.sh
     runAs: 0:0
     useTTY: true
     condition: SUCCESSFUL
@@ -279,9 +277,7 @@ jobs:
       shell: sh
       commands: |
         set -eu
-        apt-get update -qq && apt-get install -y -qq --no-install-recommends openssh-client >/dev/null
-        pip install -q --no-cache-dir -r backend/requirements.txt -r backend/requirements-dev.txt
-        cd backend && python -m pytest -q -p no:cacheprovider --cov=app --cov-report=xml:coverage.xml tests
+        sh .onedev/backend-tests.sh
     runAs: 0:0
     useTTY: true
     condition: SUCCESSFUL

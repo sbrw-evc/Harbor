@@ -28,6 +28,7 @@ class SetupState:
         self.gate = SetupGate(cfg.data_dir)
         self._lock = asyncio.Lock()
         self._task: asyncio.Task | None = None
+        self._done = False
         self.error: str | None = None
 
     @property
@@ -62,6 +63,8 @@ class SetupState:
             return True
 
     async def stage(self) -> str:
+        if self._done:  # a finished wizard never comes back
+            return STAGE_DONE
         c = self.container
         if c is None and self.boot.exists():
             # Another process has just served the storage step: start on it now rather than on the next tick of the
@@ -70,14 +73,15 @@ class SetupState:
             c = self.container
         if c is None:
             return STAGE_STORAGE
+        # The sign-in step may have been served by another process: its settings are read again, not from the cache.
+        c.settings.invalidate()
         mode = await c.settings.get("auth_mode")
-        if mode == MODE_KEYSTONE:
-            return STAGE_DONE
         if mode == MODE_LOCAL:
             async with c.db.session() as s:
-                if await UserRepo(s).count_admins():
-                    return STAGE_DONE
-        return STAGE_ACCOUNT
+                self._done = bool(await UserRepo(s).count_admins())
+        else:
+            self._done = mode == MODE_KEYSTONE
+        return STAGE_DONE if self._done else STAGE_ACCOUNT
 
     async def start(self) -> None:
         if not await self.activate():

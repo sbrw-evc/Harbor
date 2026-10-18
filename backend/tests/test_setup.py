@@ -180,22 +180,34 @@ def test_bootstrap_file_has_no_password(tmp_path):
 
 
 def test_stage_follows_storage_saved_by_another_process(tmp_path):
-    from app.setup import STAGE_ACCOUNT, STAGE_STORAGE, SetupState
+    from app.setup import STAGE_ACCOUNT, STAGE_DONE, STAGE_STORAGE, SetupState
 
     async def scenario():
         app = SimpleNamespace()
         st = SetupState(SimpleNamespace(data_dir=str(tmp_path), bao_approle_dir=str(tmp_path / "none")), app)
         started = []
 
+        settings = {"auth_mode": None, "reads": 0}
+
+        async def get(key):
+            settings["reads"] += 1
+            return settings[key]
+
         async def activate():  # stands for building and starting the container on bootstrap.json
             started.append(True)
-            app.container = SimpleNamespace(settings=SimpleNamespace(get=lambda key: asyncio.sleep(0)))
+            app.container = SimpleNamespace(settings=SimpleNamespace(get=get, invalidate=lambda: None))
             return True
         st.activate = activate
         assert await st.stage() == STAGE_STORAGE and not started  # nothing is saved yet
         # The other process wrote bootstrap.json: this one answers with the next stage at once, not after its watcher.
         st.boot.write({"postgres": {}, "clickhouse": {}, "openbao": {}})
         assert await st.stage() == STAGE_ACCOUNT and started == [True]
+        # The other process connected Keystone: the stage is read again, and once done it stays so without reading.
+        settings["auth_mode"] = "keystone"
+        assert await st.stage() == STAGE_DONE
+        reads = settings["reads"]
+        settings["auth_mode"] = None
+        assert await st.stage() == STAGE_DONE and settings["reads"] == reads
 
     asyncio.run(scenario())
 
