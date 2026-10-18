@@ -1,12 +1,12 @@
 """The life of the process before and after the setup wizard: it runs in setup mode until bootstrap.json exists, then
-builds the container and starts it. Every process watches for the file, so the one that did not serve the storage step
-follows within seconds, or at once when it is asked for the stage."""
+builds the container and starts it. Every process watches for the file, so the one that did not serve the last step of
+the wizard follows within seconds, or at once when it is asked for the stage."""
 from __future__ import annotations
 
 import asyncio
 import logging
 
-from .bootstrap import Bootstrap, SetupGate
+from .bootstrap import Bootstrap, SetupDraft, SetupGate
 from .config import Settings, legacy_environ
 from .container import Container
 from .db.repositories import UserRepo
@@ -26,6 +26,7 @@ class SetupState:
         self._app = app_state
         self.boot = Bootstrap(cfg.data_dir, cfg.bao_approle_dir)
         self.gate = SetupGate(cfg.data_dir)
+        self.draft = SetupDraft(cfg.data_dir)
         self._lock = asyncio.Lock()
         self._task: asyncio.Task | None = None
         self._done = False
@@ -62,6 +63,11 @@ class SetupState:
                 self.gate.announce()
             return True
 
+    @property
+    def storage_editable(self) -> bool:
+        """The storage of the wizard may still be changed: it is not applied (bootstrap.json is not written)."""
+        return self.container is None and not self.boot.exists()
+
     async def stage(self) -> str:
         if self._done:  # a finished wizard never comes back
             return STAGE_DONE
@@ -71,8 +77,8 @@ class SetupState:
             # watcher, so that no process answers "storage" after the wizard has moved on.
             await self.activate()
             c = self.container
-        if c is None:
-            return STAGE_STORAGE
+        if c is None:  # the storage is not applied: the wizard is at its sign-in step once a draft of it is kept
+            return STAGE_ACCOUNT if self.draft.exists() else STAGE_STORAGE
         # The sign-in step may have been served by another process: its settings are read again, not from the cache.
         c.settings.invalidate()
         mode = await c.settings.get("auth_mode")

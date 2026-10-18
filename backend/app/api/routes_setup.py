@@ -1,9 +1,12 @@
 """The setup wizard (before the first administrator exists). Every step but the state needs the one-time setup code
 in the X-Setup-Code header: it is printed to the log of the backend and written to <data>/setup-code.
 
-1. storage — PostgreSQL (TimescaleDB), ClickHouse and OpenBao (the one of the compose file is initialised here, or an
-   external one with AppRole credentials);
-2. account — the sign-in: a local administrator, or a Keystone connection key; the address of the panel.
+1. storage — PostgreSQL (TimescaleDB), ClickHouse and OpenBao (the one of the compose file, or an external one with
+   AppRole credentials): checked and kept as a draft on the server; nothing is applied yet, so it may still be changed;
+2. account — the sign-in (a local administrator, or a Keystone connection key) and the address of the panel. All of it
+   is checked first; then the storage is applied (OpenBao initialised, bootstrap.json written, Harbor started on it)
+   and the administrator created or Keystone connected. The root token and the recovery key of an OpenBao initialised
+   here come back in the answer, once.
 After that the "First steps" checklist takes over (services/onboarding.py)."""
 from __future__ import annotations
 
@@ -15,8 +18,10 @@ from ..bootstrap import (CH_SECRET, KV_MOUNT, PG_SECRET, BaoInitializer, approle
 from ..adapters.openbao import OpenBaoSecretStore
 from ..domain.errors import DomainError
 from ..domain.models import Role
+from ..services.auth import PasswordHasher
 from ..services.common import Actor
-from ..services.identity.spa import MODE_KEYSTONE, MODE_LOCAL
+from ..services.identity.spa import MODE_LOCAL, check_key
+from ..services.settings import validate
 from ..setup import STAGE_ACCOUNT, STAGE_DONE, STAGE_STORAGE, SetupState
 from .deps import COOKIE, client_ip
 
@@ -29,6 +34,9 @@ DEFAULTS = {
     "openbao": {"addr": "http://openbao:8200", "mode": "bundled"},
 }
 SETUP_ACTOR = "setup"
+# The secrets of the draft: never sent back to the browser; one left empty in the form keeps the one of the draft.
+DRAFT_SECRETS = (("postgres", "password"), ("clickhouse", "password"), ("openbao", "root_token"),
+                 ("openbao", "secret_id"))
 
 
 def state(request: Request) -> SetupState:
@@ -85,8 +93,9 @@ class AccountIn(BaseModel):
 async def setup_state(request: Request):
     st = state(request)
     stage = await st.stage()
-    return {"stage": stage, "defaults": DEFAULTS if stage == STAGE_STORAGE else None,
-            "error": st.error if stage == STAGE_STORAGE else None}
+    editable = stage != STAGE_DONE and st.storage_editable
+    return {"stage": stage, "defaults": DEFAULTS if editable else None, "storage_editable": editable,
+            "error": st.error if editable else None}
 
 
 @router.post("/verify")
@@ -102,48 +111,104 @@ async def storage_check(body: StorageIn, st: SetupState = Depends(code_checked))
             "openbao": await check_openbao(bao.addr)}
 
 
-@router.post("/storage")
-async def storage(body: StorageIn, st: SetupState = Depends(code_checked)):
-    if await st.stage() != STAGE_STORAGE:
-        raise DomainError("The storage is set up already")
-    pg, ch, bao = body.postgres, body.clickhouse, body.openbao
-    for res in (await check_postgres(pg.host, pg.port, pg.database, pg.user, pg.password),
-                await check_clickhouse(ch.url, ch.user, ch.password), await check_openbao(bao.addr)):
+async def _check_storage(d: dict, st: SetupState) -> None:
+    """Everything the storage needs, checked without changing anything."""
+    pg, ch, bao = d["postgres"], d["clickhouse"], d["openbao"]
+    for res in (await check_postgres(pg["host"], pg["port"], pg["database"], pg["user"], pg["password"]),
+                await check_clickhouse(ch["url"], ch["user"], ch["password"]), await check_openbao(bao["addr"])):
         if not res["ok"]:
             raise DomainError(res["error"])
-    shown: dict = {}
-    if bao.mode == "bundled":
-        shown = await BaoInitializer(bao.addr, st.boot.approle_dir).run(bao.root_token or None)
+    if bao["mode"] == "bundled":
+        await BaoInitializer(bao["addr"], st.boot.approle_dir).precheck(bao["root_token"] or None)
+    else:
+        if not bao["role_id"] or not bao["secret_id"]:
+            raise DomainError("Enter the AppRole role_id and secret_id of the external OpenBao")
+        await approle_login(bao["addr"], bao["role_id"], bao["secret_id"], bao["mount"])
+
+
+@router.get("/storage")
+async def storage_draft(st: SetupState = Depends(code_checked)):
+    """The storage the wizard keeps, without its secrets: which of them are kept is told instead."""
+    d = st.draft.read() if st.storage_editable else None
+    if not d:
+        return {"draft": None, "kept": {}}
+    kept = {f"{part}.{key}": bool(d[part].get(key)) for part, key in DRAFT_SECRETS}
+    for part, key in DRAFT_SECRETS:
+        d[part][key] = ""
+    return {"draft": d, "kept": kept}
+
+
+@router.post("/storage")
+async def storage(body: StorageIn, st: SetupState = Depends(code_checked)):
+    """Checks the storage and keeps it as the draft of the wizard: the last step applies it."""
+    if not st.storage_editable:
+        raise DomainError("The storage is set up already")
+    d = body.model_dump()
+    kept = st.draft.read() or {}
+    for part, key in DRAFT_SECRETS:
+        if not d[part][key]:
+            d[part][key] = (kept.get(part) or {}).get(key, "")
+    d["openbao"]["addr"] = d["openbao"]["addr"].rstrip("/")
+    d["clickhouse"]["url"] = d["clickhouse"]["url"].rstrip("/")
+    d["clickhouse"]["database"] = d["clickhouse"]["database"] or "flows"
+    await _check_storage(d, st)
+    st.draft.write(d)
+    return {"stage": await st.stage()}
+
+
+async def _apply_storage(st: SetupState) -> None:
+    """Applies the draft of the storage: OpenBao, the passwords in it, bootstrap.json, Harbor started on it."""
+    d = st.draft.read()
+    if not d:
+        raise DomainError("The storage is not set up yet")
+    await _check_storage(d, st)  # the draft may be old
+    pg, ch, bao = d["postgres"], d["clickhouse"], d["openbao"]
+    if bao["mode"] == "bundled":
+        await BaoInitializer(bao["addr"], st.boot.approle_dir).run(bao["root_token"] or None)
         mount = KV_MOUNT
     else:
-        if not bao.role_id or not bao.secret_id:
-            raise DomainError("Enter the AppRole role_id and secret_id of the external OpenBao")
-        await approle_login(bao.addr, bao.role_id, bao.secret_id, bao.mount)
-        write_approle(st.boot.approle_dir, bao.role_id, bao.secret_id)
-        mount = bao.mount
-    store = OpenBaoSecretStore(bao.addr, str(st.boot.approle_dir), mount)
-    await store.put(PG_SECRET, {"password": pg.password})
-    await store.put(CH_SECRET, {"password": ch.password})
+        write_approle(st.boot.approle_dir, bao["role_id"], bao["secret_id"])
+        mount = bao["mount"]
+    store = OpenBaoSecretStore(bao["addr"], str(st.boot.approle_dir), mount)
+    await store.put(PG_SECRET, {"password": pg["password"]})
+    await store.put(CH_SECRET, {"password": ch["password"]})
     st.boot.write({
-        "postgres": {"host": pg.host, "port": pg.port, "database": pg.database, "user": pg.user},
-        "clickhouse": {"url": ch.url.rstrip("/"), "user": ch.user, "database": ch.database or "flows"},
-        "openbao": {"addr": bao.addr.rstrip("/"), "mount": mount, "approle_dir": str(st.boot.approle_dir)},
+        "postgres": {"host": pg["host"], "port": pg["port"], "database": pg["database"], "user": pg["user"]},
+        "clickhouse": {"url": ch["url"], "user": ch["user"], "database": ch["database"]},
+        "openbao": {"addr": bao["addr"], "mount": mount, "approle_dir": str(st.boot.approle_dir)},
     })
     if not await st.activate():
-        raise DomainError(f"The storage is saved, but Harbor could not start on it: {st.error}")
-    # The root token and the recovery key are shown once: they are kept nowhere.
-    return {"stage": await st.stage(), "openbao": shown or None}
+        # Not left half applied: the storage can be corrected and the step repeated.
+        st.boot.path.unlink(missing_ok=True)
+        raise DomainError(f"Harbor could not start on the storage: {st.error}")
 
 
 @router.post("/account")
 async def account(body: AccountIn, request: Request, response: Response, st: SetupState = Depends(code_checked)):
-    if await st.stage() != STAGE_ACCOUNT:
-        raise DomainError("The storage is not set up yet" if await st.stage() == STAGE_STORAGE
-                          else "Harbor is set up already")
+    """The last step: applies everything the wizard was given."""
+    stage = await st.stage()
+    if stage != STAGE_ACCOUNT:
+        raise DomainError("The storage is not set up yet" if stage == STAGE_STORAGE else "Harbor is set up already")
+    # Everything is checked before anything is applied.
+    try:
+        base = validate({"public_base_url": body.public_base_url})["public_base_url"] if body.public_base_url else ""
+    except ValueError as e:
+        raise DomainError(str(e)) from e
+    if body.mode == MODE_LOCAL:
+        username = body.username.strip()
+        if not username or any(c.isspace() for c in username):
+            raise DomainError("Enter a user name without spaces")
+        PasswordHasher.validate_strength(body.password)
+    else:
+        if not body.key:
+            raise DomainError("Paste the connection key from Keystone (spa1.…)")
+        await check_key(body.key)
+    if st.container is None:
+        await _apply_storage(st)
     c = st.container
     actor = Actor(SETUP_ACTOR, Role.ADMIN.value, client_ip(request))
-    if body.public_base_url:
-        await c.settings.update({"public_base_url": body.public_base_url}, internal=True)
+    if base:
+        await c.settings.update({"public_base_url": base}, internal=True)
     if body.mode == MODE_LOCAL:
         user = await c.users.create(actor, body.username, body.display_name or "Administrator", Role.ADMIN,
                                     body.password, email=body.email, must_change=False)
@@ -154,14 +219,15 @@ async def account(body: AccountIn, request: Request, response: Response, st: Set
                             secure=request.url.scheme == "https", max_age=c.rc.session_ttl_hours * 3600, path="/")
         result = {"stage": STAGE_DONE, "user": user, "redirect": "/"}
     else:
-        if not body.key:
-            raise DomainError("Paste the connection key from Keystone (spa1.…)")
         await c.spa.set_key(body.key, actor)
         await c.spa.switch_to_keystone(c.auth, actor, purge_local=False)
         result = {"stage": STAGE_DONE, "redirect": "/api/auth/spa/start"}
     await c.rc.refresh_now()
+    # The root token and the recovery key of an OpenBao initialised here are shown once: with the end of the wizard
+    # they are kept nowhere.
+    keys = st.draft.bao_keys()
     st.gate.finish()
-    return result
+    return {**result, "openbao": keys}
 
 
 @router.get("/keystone")
@@ -170,5 +236,3 @@ async def keystone_hint(request: Request, st: SetupState = Depends(code_checked)
     base = (request.query_params.get("base") or str(request.base_url)).rstrip("/")
     return {"redirect_uri": f"{base}/api/auth/spa/callback", "post_logout_uri": f"{base}/",
             "roles": [r.value for r in (Role.ADMIN, Role.OPERATOR, Role.VIEWER)]}
-
-

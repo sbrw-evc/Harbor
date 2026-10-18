@@ -44,7 +44,14 @@ export interface SetupState {
     clickhouse: { url: string; user: string; database: string };
     openbao: { addr: string; mode: "bundled" | "external" };
   } | null;
+  /** The storage is not applied yet: the wizard may go back to it. */
+  storage_editable?: boolean;
   error: string | null;
+}
+/** The storage kept by the wizard, its secrets empty; `kept` says which of them the server has ("postgres.password"…). */
+export interface StorageDraft {
+  draft: StorageInput | null;
+  kept: Record<string, boolean>;
 }
 export interface StorageInput {
   postgres: { host: string; port: number; database: string; user: string; password: string };

@@ -116,6 +116,53 @@ def role_of(roles: list[str]) -> Role | None:
     return max(known, key=_RANK.index) if known else None
 
 
+async def spa_call(conn: Connection, method: str, path: str, *, body: dict | None = None, etag: str | None = None,
+                   transport: httpx.AsyncBaseTransport | None = None) -> tuple[int, Any, str | None]:
+    """A call of the federation API of SPA with the token of the connection key."""
+    headers = {"authorization": f"Bearer {conn.token}", "accept": "application/json"}
+    if etag:
+        headers["if-none-match"] = etag
+    try:
+        async with httpx.AsyncClient(timeout=oidc.TIMEOUT, transport=transport) as h:
+            r = await h.request(method, f"{conn.issuer}/api/spa/v1/{path}", json=body, headers=headers)
+    except httpx.HTTPError as e:
+        raise ExternalServiceError(f"SPA is not available: {e}") from e
+    if r.status_code == 401:
+        raise ExternalServiceError("SPA rejected the connection key: it was replaced or the application was removed")
+    if r.status_code == 304:
+        return 304, None, etag
+    if r.status_code >= 400:
+        raise ExternalServiceError(f"SPA: {path}: HTTP {r.status_code}")
+    try:
+        data = r.json() if r.content else None
+    except ValueError as e:
+        raise ExternalServiceError(f"SPA: {path}: the answer is not JSON") from e
+    return r.status_code, data, r.headers.get("etag")
+
+
+async def require_admin(conn: Connection, transport: httpx.AsyncBaseTransport | None = None) -> None:
+    """Refuses a Keystone that gives nobody the administrator role here: switching to it would lock everyone out."""
+    _, data, _ = await spa_call(conn, "GET", "users", transport=transport)
+    entries = (data or {}).get("users") if isinstance(data, dict) else None
+    admins = [e for e in entries or [] if isinstance(e, dict) and not e.get("disabled")
+              and role_of(oidc.strings(e.get("roles"))) == Role.ADMIN]
+    if not admins:
+        raise DomainError("Nobody has the administrator role of this application in Keystone: give it to "
+                          "yourself there first, or you would be locked out")
+
+
+async def check_key(raw: str, transport: httpx.AsyncBaseTransport | None = None) -> Connection:
+    """What the setup wizard checks before it saves anything: the key is whole, Keystone accepts it and gives someone
+    the administrator role here. Nothing is stored."""
+    try:
+        conn = parse_key(raw, "openbao")
+    except ValueError as e:
+        raise DomainError(str(e)) from e
+    await spa_call(conn, "GET", "config", transport=transport)
+    await require_admin(conn, transport)
+    return conn
+
+
 def safe_return(path: str | None) -> str:
     """Only paths of this application: no other hosts, no protocol-relative addresses."""
     if not path or not path.startswith("/") or path.startswith("//") or "\\" in path or path.startswith("/api/"):
@@ -291,13 +338,7 @@ class SpaService:
         nobody is locked out. The synchronisation that follows binds local records by user name and disables the
         rest; with ``purge_local`` the local passwords and TOTP secrets of the bound users are deleted from OpenBao."""
         conn, _ = await self._require()
-        status, data, _ = await self._api(conn, "GET", "users")
-        entries = (data or {}).get("users") if isinstance(data, dict) else None
-        admins = [e for e in entries or [] if isinstance(e, dict) and not e.get("disabled")
-                  and role_of(oidc.strings(e.get("roles"))) == Role.ADMIN]
-        if not admins:
-            raise DomainError("Nobody has the administrator role of this application in Keystone: give it to "
-                              "yourself there first, or you would be locked out")
+        await require_admin(conn, self._transport)
         await self._settings.update({"auth_mode": MODE_KEYSTONE}, internal=True)
         result = await self.sync(force=True, actor=actor)
         purged = 0
@@ -468,25 +509,7 @@ class SpaService:
 
     async def _api(self, conn: Connection, method: str, path: str, *, body: dict | None = None,
                    etag: str | None = None) -> tuple[int, Any, str | None]:
-        headers = {"authorization": f"Bearer {conn.token}", "accept": "application/json"}
-        if etag:
-            headers["if-none-match"] = etag
-        try:
-            async with httpx.AsyncClient(timeout=oidc.TIMEOUT, transport=self._transport) as h:
-                r = await h.request(method, f"{conn.issuer}/api/spa/v1/{path}", json=body, headers=headers)
-        except httpx.HTTPError as e:
-            raise ExternalServiceError(f"SPA is not available: {e}") from e
-        if r.status_code == 401:
-            raise ExternalServiceError("SPA rejected the connection key: it was replaced or the application was removed")
-        if r.status_code == 304:
-            return 304, None, etag
-        if r.status_code >= 400:
-            raise ExternalServiceError(f"SPA: {path}: HTTP {r.status_code}")
-        try:
-            data = r.json() if r.content else None
-        except ValueError as e:
-            raise ExternalServiceError(f"SPA: {path}: the answer is not JSON") from e
-        return r.status_code, data, r.headers.get("etag")
+        return await spa_call(conn, method, path, body=body, etag=etag, transport=self._transport)
 
     async def state(self) -> dict:
         return dict(await self._settings.get("spa") or {})

@@ -25,15 +25,20 @@ the log asks to remove them.
 Opens by itself while Harbor is not set up. Every step asks for the **setup code**, printed by `install.sh`
 and in `docker compose logs backend` (also `data/backend/setup-code`); it disappears when the wizard is done.
 
-1. **Storage** — PostgreSQL (TimescaleDB), ClickHouse and OpenBao. The bundled services are filled in. OpenBao of the
-   compose file is initialised by the wizard: the **root token and the recovery key are shown once** — keep them in a
-   password manager. An external OpenBao is used with an AppRole (`role_id`, `secret_id`, KV v2 mount).
-   The result is `data/backend/bootstrap.json` (addresses and user names, no password) and `data/backend/approle/`
-   (the only secret on disk); passwords go to OpenBao (`infra/postgres`, `infra/clickhouse`).
+1. **Storage** — PostgreSQL (TimescaleDB), ClickHouse and OpenBao. The bundled services are filled in. An
+   external OpenBao is used with an AppRole (`role_id`, `secret_id`, KV v2 mount). The step only **checks** the storage:
+   the server keeps it as a draft (`data/backend/setup-draft.json`, 0600) until the last step, so one may come back and
+   change it.
 2. **Sign-in** — the address of the panel and how people sign in:
    - **Users of Harbor** — a standalone installation: the first administrator is created here; passwords
      (argon2id) and TOTP secrets are kept in OpenBao (`local/users/<id>`), never in PostgreSQL;
    - **Keystone** — the connection key `spa1.…` (see below); somebody must have the `admin` role of the application.
+
+   Its button **applies everything**, after checking all of it: OpenBao of the compose file is initialised, the storage
+   written, the administrator created or Keystone connected. The result is `data/backend/bootstrap.json` (addresses and user names, no password) and `data/backend/approle/`
+   (the only secret on disk); passwords go to OpenBao (`infra/postgres`, `infra/clickhouse`).
+3. **OpenBao keys** — when the wizard initialised OpenBao, its **root token and recovery key are shown once**: keep
+   them in a password manager.
 
 Then the **First steps** checklist of the overview leads through the rest: the router, the Amnezia server, the gateway,
 the first device, flows, a VPN client, Telegram and backups.

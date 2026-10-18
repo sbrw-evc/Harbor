@@ -2,7 +2,7 @@ import type {
   Alert, ApiTokenInfo, AuditItem, BackupItem, CustomPrefix, FlowField, FlowOverview, FlowQuery, FlowRecord, FlowResult,
   FlowStatus, RouteCheck, SavedFilter, ClientBundle, GeoData, HeatCell, LivePoint, PanelUser, Range, RouterStatus, SeriesPoint,
   MikrotikVpnInfo, OpnsenseVpnInfo, ServerInfo, ServerKind, Session, Settings, SiteListSummary, Summary, TopRow, VpnClient, VpnServer,
-  AuthConfig, AuthMode, ImportReport, InfraInfo, Role, SetupStage, SetupState, SpaStatus, StorageCheck, StorageInput,
+  AuthConfig, AuthMode, ImportReport, InfraInfo, Role, SetupStage, SetupState, SpaStatus, StorageCheck, StorageDraft, StorageInput,
   DeviceAction, DevicePlatform, DiscoveryResult, FlowExporter, FlowRule, FlowRuleKind, NetworkDevice, NetworkEndpoint,
   SavedView, ThreatInfo, Topology, Onboarding,
 } from "./types";
@@ -67,11 +67,14 @@ export class SetupApi extends Resource {
   }
   verify(code: string) { return this.call<{ ok: boolean; stage: SetupStage }>("POST", "/api/setup/verify", code, {}); }
   checkStorage(code: string, s: StorageInput) { return this.call<StorageCheck>("POST", "/api/setup/storage/check", code, s); }
-  storage(code: string, s: StorageInput) {
-    return this.call<{ stage: SetupStage; openbao: { root_token: string; recovery_key: string } | null }>("POST", "/api/setup/storage", code, s);
-  }
+  /** The storage the server keeps as a draft until the last step; its secrets are not sent back. */
+  storageDraft(code: string) { return this.call<StorageDraft>("GET", "/api/setup/storage", code); }
+  /** Checks the storage and keeps it as a draft: nothing is applied before the last step. */
+  storage(code: string, s: StorageInput) { return this.call<{ stage: SetupStage }>("POST", "/api/setup/storage", code, s); }
+  /** The last step: applies everything. The keys of an OpenBao initialised by it come back once. */
   account(code: string, body: { mode: AuthMode; public_base_url?: string; username?: string; display_name?: string; email?: string; password?: string; key?: string }) {
-    return this.call<{ stage: SetupStage; user?: PanelUser; redirect: string }>("POST", "/api/setup/account", code, body);
+    return this.call<{ stage: SetupStage; user?: PanelUser; redirect: string; openbao: { root_token: string; recovery_key: string } | null }>(
+      "POST", "/api/setup/account", code, body);
   }
   keystone(code: string, base: string) {
     return this.http.request<{ redirect_uri: string; post_logout_uri: string; roles: string[] }>("GET", "/api/setup/keystone",

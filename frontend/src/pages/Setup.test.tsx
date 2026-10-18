@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import SetupPage from "./Setup";
 
 const setup = vi.hoisted(() => ({
-  state: vi.fn(), verify: vi.fn(), checkStorage: vi.fn(), storage: vi.fn(), account: vi.fn(), keystone: vi.fn(),
+  state: vi.fn(), verify: vi.fn(), checkStorage: vi.fn(), storageDraft: vi.fn(), storage: vi.fn(), account: vi.fn(), keystone: vi.fn(),
 }));
 const notify = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn(), warning: vi.fn(), info: vi.fn() }));
 const bootstrap = vi.hoisted(() => vi.fn(() => Promise.resolve()));
@@ -19,8 +19,10 @@ const DEFAULTS = {
   clickhouse: { url: "http://clickhouse:8123", user: "amnezia", database: "flows" },
   openbao: { addr: "http://openbao:8200", mode: "bundled" },
 };
-const STORAGE = { stage: "storage", defaults: DEFAULTS, error: null };
-const ACCOUNT = { stage: "account", defaults: null, error: null };
+const STORAGE = { stage: "storage", defaults: DEFAULTS, storage_editable: true, error: null };
+// The storage is a draft on the server: the sign-in step is next, the storage may still be changed.
+const ACCOUNT = { stage: "account", defaults: DEFAULTS, storage_editable: true, error: null };
+const DONE = { stage: "done", defaults: null, storage_editable: false, error: null };
 const SECRETS = { root_token: "s.root", recovery_key: "recovery==" };
 
 const location = { origin: "https://nc.test", replace: vi.fn(), assign: vi.fn() };
@@ -55,16 +57,34 @@ async function toStorage() {
   type(input("Password", 1), "ch-pass");
 }
 
-/** Saves the storage; the server answers with these keys of OpenBao. */
-async function save(openbao: typeof SECRETS | null) {
-  setup.storage.mockResolvedValue({ stage: "account", openbao });
+/** Hands the storage to the server, which keeps it as a draft. */
+async function save() {
+  const before = setup.storage.mock.calls.length;
+  setup.storage.mockResolvedValue({ stage: "account" });
   fireEvent.click(screen.getByRole("button", { name: /Save and continue/ }));
-  await waitFor(() => expect(setup.storage).toHaveBeenCalled());
+  await waitFor(() => expect(setup.storage).toHaveBeenCalledTimes(before + 1));
+}
+
+/** Through the storage to the sign-in step. */
+async function toAccount() {
+  await toStorage();
+  setup.state.mockResolvedValue(ACCOUNT);
+  await save();
+  await screen.findByText("How people sign in");
+}
+
+/** Fills the local administrator and presses the button that applies everything. */
+async function createAdmin() {
+  type(input("Password"), "Correct-Horse-9");
+  type(input("Repeat"), "Correct-Horse-9");
+  fireEvent.click(screen.getByRole("button", { name: /Create the administrator/ }));
+  await waitFor(() => expect(setup.account).toHaveBeenCalled());
 }
 
 beforeEach(() => {
   vi.clearAllMocks();
   vi.stubGlobal("location", { ...window.location, ...location });
+  setup.storageDraft.mockResolvedValue({ draft: null, kept: {} });
 });
 
 afterEach(() => {
@@ -88,7 +108,7 @@ describe("the setup code", () => {
   });
 
   it("shows the overview once the wizard is done", async () => {
-    setup.state.mockResolvedValue({ stage: "done", defaults: null, error: null });
+    setup.state.mockResolvedValue(DONE);
     renderWizard();
     expect(await screen.findByText("overview")).toBeTruthy();
   });
@@ -121,41 +141,113 @@ describe("the storage step", () => {
     await waitFor(() => expect(notify.error).toHaveBeenCalledWith("The check failed", "timeout"));
   });
 
-  it("takes an external OpenBao and goes straight to the sign-in", async () => {
+  it("takes an external OpenBao and goes to the sign-in, nothing applied yet", async () => {
     await toStorage();
     fireEvent.click(screen.getByRole("radio", { name: /An external OpenBao/ }));
     type(input("role_id"), "role");
     type(input("secret_id"), "secret");
     type(input("KV mount"), "kv");
     type(input("Address", 1), "http://bao:8200");
-    await save(null);
+    await save();
     expect(setup.storage.mock.calls[0][1].openbao).toMatchObject({ mode: "external", role_id: "role", secret_id: "secret", mount: "kv" });
     await screen.findByText("How people sign in");
-    expect(notify.success).toHaveBeenCalledWith("The storage is saved", expect.any(String));
+    expect(notify.success).toHaveBeenCalledWith("The storage is checked", "It is applied with the last step of the wizard.");
+    expect(setup.account).not.toHaveBeenCalled();
   });
 
-  it("reports a failed save and stays", async () => {
+  it("reports a refused storage and stays", async () => {
     await toStorage();
     fireEvent.click(screen.getByRole("radio", { name: /initialise it now/ }));
     type(input("Root token (only if initialised before)"), "s.old");
     setup.storage.mockRejectedValueOnce(new Error("OpenBao is sealed"));
     fireEvent.click(screen.getByRole("button", { name: /Save and continue/ }));
-    await waitFor(() => expect(notify.error).toHaveBeenCalledWith("The storage is not saved", "OpenBao is sealed"));
+    await waitFor(() => expect(notify.error).toHaveBeenCalledWith("The storage is not accepted", "OpenBao is sealed"));
     expect(screen.getByText("PostgreSQL (TimescaleDB)")).toBeTruthy();
+  });
+
+  it("comes back from the draft of the server, its secrets kept there", async () => {
+    // A reload after the storage step: the server has the draft, the browser only the setup code.
+    sessionStorage.setItem("nc_setup_code", "ABCDEFGHIJKL");
+    setup.state.mockResolvedValue(ACCOUNT);
+    setup.verify.mockResolvedValue({ ok: true, stage: "account" });
+    setup.storageDraft.mockResolvedValue({
+      draft: {
+        postgres: { host: "db2", port: 5433, database: "harbor", user: "pg", password: "" },
+        clickhouse: { url: "http://ch:8123", user: "ch", password: "", database: "flows" },
+        openbao: { addr: "http://openbao:8200", mode: "bundled", root_token: "", role_id: "", secret_id: "", mount: "amnezia" },
+      },
+      kept: { "postgres.password": true, "clickhouse.password": true, "openbao.root_token": false, "openbao.secret_id": false },
+    });
+    renderWizard();
+    fireEvent.click(await screen.findByRole("button", { name: /Continue/ }));
+    await screen.findByText("How people sign in");
+    fireEvent.click(screen.getByRole("button", { name: /^Back$/ }));
+    await waitFor(() => expect(input("Host").value).toBe("db2"));
+    expect(input("Password", 0).value).toBe("");
+    expect(screen.getAllByText("kept on the server; leave empty to keep it")).toHaveLength(2);
+    await save();
+    expect(setup.storage.mock.calls[0][1].postgres).toMatchObject({ host: "db2", password: "" });
+  });
+});
+
+describe("the sign-in step", () => {
+  it("applies everything with its button, creates the administrator and signs in", async () => {
+    await toAccount();
+    type(input("Address of the panel"), "https://nc.example.com/");
+    type(input("Name"), "Root");
+    type(input("E-mail"), "root@example.com");
+    type(input("Password"), "Correct-Horse-9");
+    type(input("Repeat"), "Correct-Horse-8");
+    expect(await screen.findByText("the passwords differ")).toBeTruthy();
+    type(input("Repeat"), "Correct-Horse-9");
+
+    setup.account.mockRejectedValueOnce(new Error("The password is too weak"));
+    fireEvent.click(screen.getByRole("button", { name: /Create the administrator/ }));
+    await waitFor(() => expect(notify.error).toHaveBeenCalledWith("The administrator is not created", "The password is too weak"));
+
+    setup.account.mockResolvedValueOnce({ user: { role: "admin" }, redirect: "/", openbao: null });
+    fireEvent.click(screen.getByRole("button", { name: /Create the administrator/ }));
+    await waitFor(() => expect(location.replace).toHaveBeenCalledWith("/"));
+    expect(setup.account.mock.calls[1][1]).toMatchObject({
+      mode: "local", public_base_url: "https://nc.example.com", username: "admin", display_name: "Root", email: "root@example.com",
+    });
+    expect(bootstrap).toHaveBeenCalled();
+    expect(notify.success).toHaveBeenCalledWith("The administrator admin is created", expect.any(String));
+  });
+
+  it("connects Keystone and goes there to sign in", async () => {
+    await toAccount();
+    setup.keystone.mockResolvedValue({ redirect_uri: "https://nc.test/api/auth/callback", post_logout_uri: "https://nc.test/login" });
+    fireEvent.click(screen.getByRole("radio", { name: /Keystone \(single sign-on\)/ }));
+    expect(await screen.findByText("https://nc.test/api/auth/callback")).toBeTruthy();
+    type(screen.getByPlaceholderText("spa1.…"), " spa1.key ");
+
+    setup.account.mockRejectedValueOnce(new Error("Nobody is admin in Keystone"));
+    fireEvent.click(screen.getByRole("button", { name: /Connect Keystone/ }));
+    await waitFor(() => expect(notify.error).toHaveBeenCalledWith("Keystone is not connected", "Nobody is admin in Keystone"));
+
+    setup.account.mockResolvedValueOnce({ redirect: "https://keystone.test/authorize", openbao: null });
+    fireEvent.click(screen.getByRole("button", { name: /Connect Keystone/ }));
+    await waitFor(() => expect(location.assign).toHaveBeenCalledWith("https://keystone.test/authorize"));
+    expect(setup.account.mock.calls[1][1]).toMatchObject({ mode: "keystone", key: "spa1.key" });
+    expect(notify.success).toHaveBeenCalledWith("Keystone is connected", expect.any(String));
   });
 });
 
 describe("the keys of OpenBao", () => {
-  it("stay until they are confirmed, although the server reads the stage behind", async () => {
-    await toStorage();
-    // Another worker of the backend still answers "storage" right after the save.
-    await save(SECRETS);
+  it("come after the last step and stay until they are confirmed, although the wizard is done on the server", async () => {
+    await toAccount();
+    setup.account.mockResolvedValue({ user: { role: "admin" }, redirect: "/", openbao: SECRETS });
+    setup.state.mockResolvedValue(DONE);
+    await createAdmin();
     expect(await screen.findByDisplayValue("s.root")).toBeTruthy();
     expect(screen.getByDisplayValue("recovery==")).toBeTruthy();
     expect(notify.warning).toHaveBeenCalledWith("OpenBao is initialised", expect.any(String));
-    setup.state.mockResolvedValue(ACCOUNT);
     await act(() => new Promise((r) => setTimeout(r, 50)));
     expect(screen.getByDisplayValue("s.root")).toBeTruthy();
+    expect(screen.queryByText("overview")).toBeNull();
+    expect(location.replace).not.toHaveBeenCalled();
+    expect(screen.queryByRole("button", { name: /^Back$/ })).toBeNull();  // everything is applied: no way back
 
     const leave = new Event("beforeunload", { cancelable: true });
     window.dispatchEvent(leave);
@@ -184,69 +276,20 @@ describe("the keys of OpenBao", () => {
     window.dispatchEvent(confirmed);
     expect(confirmed.defaultPrevented).toBe(false);
     fireEvent.click(next);
-    await screen.findByText("How people sign in");
+    await waitFor(() => expect(location.replace).toHaveBeenCalledWith("/"));
+    expect(bootstrap).toHaveBeenCalled();
   });
 
   it("warn when OpenBao returned no recovery key", async () => {
-    await toStorage();
-    await save({ root_token: "s.root", recovery_key: "" });
+    await toAccount();
+    setup.account.mockResolvedValue({ user: { role: "admin" }, redirect: "/", openbao: { root_token: "s.root", recovery_key: "" } });
+    await createAdmin();
     expect(await screen.findByText(/OpenBao did not return it/)).toBeTruthy();
   });
 });
 
-describe("the sign-in step", () => {
-  async function toAccount() {
-    await toStorage();
-    setup.state.mockResolvedValue(ACCOUNT);
-    await save(null);
-    await screen.findByText("How people sign in");
-  }
-
-  it("creates the administrator and signs in", async () => {
-    await toAccount();
-    type(input("Address of the panel"), "https://nc.example.com/");
-    type(input("Name"), "Root");
-    type(input("E-mail"), "root@example.com");
-    type(input("Password"), "Correct-Horse-9");
-    type(input("Repeat"), "Correct-Horse-8");
-    expect(await screen.findByText("the passwords differ")).toBeTruthy();
-    type(input("Repeat"), "Correct-Horse-9");
-
-    setup.account.mockRejectedValueOnce(new Error("The password is too weak"));
-    fireEvent.click(screen.getByRole("button", { name: /Create the administrator/ }));
-    await waitFor(() => expect(notify.error).toHaveBeenCalledWith("The administrator is not created", "The password is too weak"));
-
-    setup.account.mockResolvedValueOnce({ user: { role: "admin" } });
-    fireEvent.click(screen.getByRole("button", { name: /Create the administrator/ }));
-    await waitFor(() => expect(location.replace).toHaveBeenCalledWith("/"));
-    expect(setup.account.mock.calls[1][1]).toMatchObject({
-      mode: "local", public_base_url: "https://nc.example.com", username: "admin", display_name: "Root", email: "root@example.com",
-    });
-    expect(bootstrap).toHaveBeenCalled();
-    expect(notify.success).toHaveBeenCalledWith("The administrator admin is created", expect.any(String));
-  });
-
-  it("connects Keystone and goes there to sign in", async () => {
-    await toAccount();
-    setup.keystone.mockResolvedValue({ redirect_uri: "https://nc.test/api/auth/callback", post_logout_uri: "https://nc.test/login" });
-    fireEvent.click(screen.getByRole("radio", { name: /Keystone \(single sign-on\)/ }));
-    expect(await screen.findByText("https://nc.test/api/auth/callback")).toBeTruthy();
-    type(screen.getByPlaceholderText("spa1.…"), " spa1.key ");
-
-    setup.account.mockRejectedValueOnce(new Error("Nobody is admin in Keystone"));
-    fireEvent.click(screen.getByRole("button", { name: /Connect Keystone/ }));
-    await waitFor(() => expect(notify.error).toHaveBeenCalledWith("Keystone is not connected", "Nobody is admin in Keystone"));
-
-    setup.account.mockResolvedValueOnce({ redirect: "https://keystone.test/authorize" });
-    fireEvent.click(screen.getByRole("button", { name: /Connect Keystone/ }));
-    await waitFor(() => expect(location.assign).toHaveBeenCalledWith("https://keystone.test/authorize"));
-    expect(setup.account.mock.calls[1][1]).toMatchObject({ mode: "keystone", key: "spa1.key" });
-    expect(notify.success).toHaveBeenCalledWith("Keystone is connected", expect.any(String));
-  });
-});
-
 describe("going back", () => {
-  it("returns from the storage to the setup code and from the sign-in to the keys, keeping what was typed", async () => {
+  it("returns through every step before the last one, keeping what was typed", async () => {
     await toStorage();
     fireEvent.click(screen.getByRole("button", { name: /^Back$/ }));
     const codeInput = await screen.findByRole("textbox");
@@ -258,18 +301,18 @@ describe("going back", () => {
     fireEvent.click(screen.getByRole("button", { name: /Go to the step Storage/ }));  // forward, without the code again
     expect(input("Password", 1).value).toBe("ch-pass");
 
-    await save(SECRETS);
-    await screen.findByDisplayValue("s.root");
-    expect(screen.queryByRole("button", { name: /^Back$/ })).toBeNull();  // the saved storage cannot be edited again
-    fireEvent.click(screen.getByRole("checkbox"));
-    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    setup.state.mockResolvedValue(ACCOUNT);
+    await save();
     await screen.findByText("How people sign in");
     type(input("Name"), "Root");
+    // The storage is only a draft on the server: the sign-in step goes back to it.
     fireEvent.click(screen.getByRole("button", { name: /^Back$/ }));
-    expect(screen.getByDisplayValue("recovery==")).toBeTruthy();
-    expect(screen.getByRole("checkbox").getAttribute("aria-checked")).toBe("true");
-    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    await waitFor(() => expect(input("Password", 0).value).toBe("pg-pass"));
+    type(input("Host"), "db2");
+    await save();
+    expect(setup.storage.mock.calls[1][1].postgres).toMatchObject({ host: "db2", password: "pg-pass" });
     await waitFor(() => expect(input("Name").value).toBe("Root"));
-    expect(screen.queryByRole("button", { name: /Go to the step Storage/ })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /Go to the step Storage/ }));
+    expect(input("Host").value).toBe("db2");
   });
 });

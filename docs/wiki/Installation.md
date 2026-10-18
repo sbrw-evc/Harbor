@@ -46,7 +46,7 @@ OpenBao unseal key, starts the stack and prints:
 - the passwords of PostgreSQL and ClickHouse for the storage step.
 
 Open the address and go through the **setup wizard** (see [[Configuration]]): the storage, then the sign-in (a local
-administrator or Keystone). Save the OpenBao root token and recovery key the wizard shows once.
+administrator or Keystone), whose button applies everything. Save the OpenBao root token and recovery key the wizard shows once.
 
 The **First steps** checklist of the overview then leads through the rest:
 

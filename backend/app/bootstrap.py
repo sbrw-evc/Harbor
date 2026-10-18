@@ -1,9 +1,10 @@
 """Where the panel keeps its data: PostgreSQL (TimescaleDB), ClickHouse and OpenBao, chosen in the setup wizard.
 
 Before the wizard the panel runs in setup mode: only /api/setup answers, and a one-time setup code (printed to the
-log and written to <data>/setup-code) is required for every step. The storage step writes <data>/bootstrap.json —
-addresses and user names, never a password — and the AppRole credentials of OpenBao to <data>/approle/. The
-passwords of PostgreSQL and ClickHouse go to OpenBao (infra/postgres, infra/clickhouse): the AppRole secret is the
+log and written to <data>/setup-code) is required for every step. The storage step only checks what was entered
+and keeps it as a draft (<data>/setup-draft.json); nothing is applied before the last step. That one initialises
+OpenBao, writes <data>/bootstrap.json — addresses and user names, never a password — and the AppRole credentials of
+OpenBao to <data>/approle/, then creates the administrator or connects Keystone. The passwords of PostgreSQL and ClickHouse go to OpenBao (infra/postgres, infra/clickhouse): the AppRole secret is the
 only secret on disk.
 
 Installations from before the wizard had DATABASE_URL, CLICKHOUSE_* and the AppRole files of the bao-init service:
@@ -42,6 +43,8 @@ PG_SECRET = "infra/postgres"
 CH_SECRET = "infra/clickhouse"
 CODE_ALPHABET = string.ascii_uppercase.replace("O", "").replace("I", "") + "23456789"
 CODE_LENGTH = 12
+DRAFT_FILE = "setup-draft.json"
+BAO_PENDING_FILE = "openbao-init.json"
 
 
 def _write_private(path: Path, text: str) -> None:
@@ -125,12 +128,41 @@ class SetupGate:
             raise Forbidden("Wrong setup code: it is in the log of the backend container (docker compose logs backend)")
 
     def finish(self) -> None:
-        """The wizard is done: the setup code and the OpenBao root token kept for retries go away."""
-        for path in (self._path, self._path.parent / "openbao-init.json"):
+        """The wizard is done: the setup code, the draft of the storage and the OpenBao root token kept for retries go
+        away."""
+        for path in (self._path, self._path.parent / BAO_PENDING_FILE, self._path.parent / DRAFT_FILE):
             try:
                 path.unlink()
             except OSError:
                 pass
+
+
+class SetupDraft:
+    """What the storage step of the wizard was given, kept until its last step applies it. The processes of the backend
+    share it through <data>/setup-draft.json (0600, passwords included, like the root token of OpenBao kept for
+    retries); the end of the wizard deletes it."""
+
+    def __init__(self, data_dir: str):
+        self.path = Path(data_dir) / DRAFT_FILE
+
+    def exists(self) -> bool:
+        return self.path.exists()
+
+    def read(self) -> dict | None:
+        try:
+            return json.loads(self.path.read_text())
+        except (OSError, ValueError):
+            return None
+
+    def write(self, data: dict) -> None:
+        _write_private(self.path, json.dumps(data) + "\n")
+
+    def bao_keys(self) -> dict | None:
+        """The root token and the recovery key of the OpenBao this wizard initialised, until the wizard is done."""
+        try:
+            return json.loads((self.path.parent / BAO_PENDING_FILE).read_text())
+        except (OSError, ValueError):
+            return None
 
 
 class Bootstrap:
@@ -252,7 +284,7 @@ class BaoInitializer:
         self._addr = addr
         self._dir = approle_dir
         self._transport = transport
-        self._pending = pending or approle_dir.parent / "openbao-init.json"
+        self._pending = pending or approle_dir.parent / BAO_PENDING_FILE
         self._wait = wait
 
     async def _active(self, h: httpx.AsyncClient) -> None:
@@ -263,6 +295,20 @@ class BaoInitializer:
                 return
             await asyncio.sleep(self._wait)
         raise DomainError("OpenBao does not become active: check openbao/keys/unseal.key and its log")
+
+    async def precheck(self, root_token: str | None = None) -> None:
+        """What run() needs, checked without changing OpenBao: the root token of one initialised before."""
+        async with httpx.AsyncClient(base_url=self._addr, timeout=30, transport=self._transport) as h:
+            if not (await h.get("/v1/sys/init")).json().get("initialized"):
+                return
+            if not root_token:
+                if self._pending.exists():  # initialised by an attempt of this wizard that failed later
+                    return
+                raise DomainError("OpenBao is initialised already: enter its root token (shown when it was "
+                                  "initialised; for an old installation in data/bao-init/init.json)")
+            r = await h.get("/v1/auth/token/lookup-self", headers={"X-Vault-Token": root_token})
+            if r.status_code != 200:
+                raise DomainError(f"OpenBao does not accept the root token ({r.status_code})")
 
     async def run(self, root_token: str | None = None) -> dict:
         async with httpx.AsyncClient(base_url=self._addr, timeout=30, transport=self._transport) as h:

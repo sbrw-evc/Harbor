@@ -11,7 +11,7 @@ import pyotp
 import pytest
 from fastapi import FastAPI
 
-from app.bootstrap import BaoInitializer, Bootstrap, SetupGate, parse_pg_url, pg_url
+from app.bootstrap import BaoInitializer, Bootstrap, SetupDraft, SetupGate, parse_pg_url, pg_url
 from app.domain.errors import DomainError, Forbidden, Unauthorized
 from app.domain.models import Role
 from app.services.audit import AuditService
@@ -112,6 +112,8 @@ def fake_bao():
             return httpx.Response(200, json={"initialized": True, "sealed": False})
         if request.headers.get("x-vault-token") != "root-1":
             return httpx.Response(403, json={"errors": ["permission denied"]})
+        if p == "/v1/auth/token/lookup-self":
+            return httpx.Response(200, json={"data": {"policies": ["root"]}})
         if p == "/v1/sys/mounts" and m == "GET":
             return httpx.Response(200, json={"data": st["mounts"]})
         if p.startswith("/v1/sys/mounts/"):
@@ -168,6 +170,44 @@ def test_bao_initializer(tmp_path):
     asyncio.run(scenario())
 
 
+def test_bao_precheck_changes_nothing(tmp_path):
+    st, transport = fake_bao()
+    init = BaoInitializer("http://bao", tmp_path / "approle", transport, wait=0)
+
+    async def scenario():
+        await init.precheck()  # not initialised yet: the last step will
+        assert not st["initialized"] and [m for m, _ in st["calls"]] == ["GET"]
+        st["initialized"] = True
+        with pytest.raises(DomainError, match="enter its root token"):
+            await init.precheck()
+        with pytest.raises(DomainError, match="does not accept the root token"):
+            await init.precheck("wrong")
+        await init.precheck("root-1")
+        (tmp_path / "openbao-init.json").write_text('{"root_token": "root-1", "recovery_key": "rec-1"}')
+        await init.precheck()  # initialised by an earlier attempt of the wizard: its token is kept
+        assert SetupDraft(str(tmp_path)).bao_keys() == {"root_token": "root-1", "recovery_key": "rec-1"}
+        assert not st["mounts"] and not st["auths"]
+
+    asyncio.run(scenario())
+
+
+def test_keystone_key_is_checked_before_setup(tmp_path):
+    from app.services.identity.spa import check_key
+
+    async def scenario():
+        fake = FakeSpa()
+        with pytest.raises(DomainError, match="spa1"):
+            await check_key("nonsense", fake.transport())
+        with pytest.raises(DomainError, match="administrator role"):
+            await check_key(connection_key(), fake.transport())
+        fake.add_user("usr_1", "root", ["admin"])
+        conn = await check_key(connection_key(), fake.transport())
+        assert conn.client_id == "app_nc"
+        assert SetupDraft(str(tmp_path)).read() is None  # a missing draft reads as none
+
+    asyncio.run(scenario())
+
+
 def test_bootstrap_file_has_no_password(tmp_path):
     boot = Bootstrap(str(tmp_path), str(tmp_path / "none"))
     boot.write({"postgres": {"host": "postgres", "port": 5432, "database": "amnezia", "user": "amnezia"},
@@ -208,6 +248,116 @@ def test_stage_follows_storage_saved_by_another_process(tmp_path):
         reads = settings["reads"]
         settings["auth_mode"] = None
         assert await st.stage() == STAGE_DONE and settings["reads"] == reads
+
+    asyncio.run(scenario())
+
+
+def test_wizard_applies_nothing_before_its_last_step(tmp_path, monkeypatch):
+    """The storage step only checks and keeps a draft; the button of the sign-in step applies everything at once."""
+    from app import main
+    from app.api import routes_setup
+    from app.setup import SetupState
+
+    bao, transport = fake_bao()
+
+    async def ok(*_args):
+        return {"ok": True}
+    for name in ("check_postgres", "check_clickhouse", "check_openbao"):
+        monkeypatch.setattr(routes_setup, name, ok)
+    monkeypatch.setattr(routes_setup, "BaoInitializer",
+                        lambda addr, approle_dir: BaoInitializer(addr, approle_dir, transport, wait=0))
+    stored = Secrets()
+    monkeypatch.setattr(routes_setup, "OpenBaoSecretStore", lambda *_args: stored)
+
+    app = FastAPI()
+    app.add_exception_handler(DomainError, main.domain_error)
+    app.include_router(routes_setup.router)
+    st = SetupState(SimpleNamespace(data_dir=str(tmp_path), bao_approle_dir=str(tmp_path / "none")), app.state)
+    app.state.setup = st
+    code = st.gate.ensure()
+    settings: dict = {"auth_mode": None}
+    created = []
+
+    async def update(values, internal=False):
+        settings.update(values)
+
+    async def get(key):
+        return settings.get(key)
+
+    async def create(actor, username, display_name, role, password, email="", must_change=True):
+        created.append(username)
+        return {"id": 1, "username": username, "role": role.value}
+
+    async def start_session(*_args, **_kw):
+        return "token-1"
+    container = SimpleNamespace(settings=SimpleNamespace(update=update, get=get, invalidate=lambda: None),
+                                users=SimpleNamespace(create=create), auth=SimpleNamespace(start_session=start_session),
+                                rc=SimpleNamespace(session_ttl_hours=12, refresh_now=lambda: asyncio.sleep(0)))
+    starts = {"ok": False, "n": 0}
+
+    async def activate():  # stands for starting Harbor on bootstrap.json
+        starts["n"] += 1
+        if not starts["ok"]:
+            st.error = "PostgreSQL is down"
+            return False
+        app.state.container = container
+        return True
+    st.activate = activate
+
+    storage = {"postgres": {"host": "postgres", "port": 5432, "database": "amnezia", "user": "amnezia",
+                            "password": "pg-pw"},
+               "clickhouse": {"url": "http://clickhouse:8123/", "user": "amnezia", "password": "ch-pw"},
+               "openbao": {"addr": "http://openbao:8200", "mode": "bundled"}}
+    account = {"mode": "local", "username": "root", "password": PASSWORD, "public_base_url": "https://nc.test"}
+    h = {"x-setup-code": code}
+
+    def nothing_applied():
+        assert not bao["initialized"] and not st.boot.exists() and not (tmp_path / "approle").exists()
+        assert not stored.d and not created
+
+    async def scenario():
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://nc.test") as c:
+            assert (await c.get("/api/setup/storage", headers=h)).json() == {"draft": None, "kept": {}}
+            r = await c.post("/api/setup/account", json=account, headers=h)
+            assert r.status_code == 400 and "not set up yet" in r.text  # the sign-in waits for the storage
+            r = await c.post("/api/setup/storage", json=storage, headers=h)
+            assert r.status_code == 200 and r.json() == {"stage": "account"}, r.text
+            nothing_applied()
+            assert stat.S_IMODE(os.stat(st.draft.path).st_mode) == 0o600
+            assert (await c.get("/api/setup")).json()["storage_editable"] is True
+
+            # Back to the storage: the draft comes without its secrets; left empty, they are kept.
+            r = (await c.get("/api/setup/storage", headers=h)).json()
+            assert r["draft"]["postgres"]["password"] == "" and r["kept"]["postgres.password"] is True
+            assert r["draft"]["clickhouse"]["url"] == "http://clickhouse:8123"
+            changed = {**storage, "postgres": {**storage["postgres"], "host": "db2", "password": ""}}
+            assert (await c.post("/api/setup/storage", json=changed, headers=h)).status_code == 200
+            assert st.draft.read()["postgres"] == {**storage["postgres"], "host": "db2"}
+
+            # A wrong sign-in is refused before anything is applied.
+            r = await c.post("/api/setup/account", json={**account, "password": "short"}, headers=h)
+            assert r.status_code == 400
+            nothing_applied()
+
+            # Harbor does not start on the storage: bootstrap.json does not stay, the storage may still be changed.
+            r = await c.post("/api/setup/account", json=account, headers=h)
+            assert r.status_code == 400 and "PostgreSQL is down" in r.text
+            assert not st.boot.exists() and st.storage_editable and not created
+
+            starts["ok"] = True
+            r = await c.post("/api/setup/account", json=account, headers=h)
+            assert r.status_code == 200, r.text
+            # The keys of the OpenBao initialised by the first attempt come with the answer that finishes the wizard.
+            assert r.json()["openbao"] == {"root_token": "root-1", "recovery_key": "rec-1"}
+            assert r.json()["user"]["username"] == "root" and created == ["root"]
+            assert json.loads(st.boot.path.read_text())["postgres"]["host"] == "db2"
+            assert "password" not in st.boot.path.read_text()
+            assert stored.d["infra/postgres"] == {"password": "pg-pw"} and stored.d["infra/clickhouse"] == {"password": "ch-pw"}
+            assert settings == {"auth_mode": "local", "public_base_url": "https://nc.test"}
+            # The draft, the kept keys and the setup code go with the wizard.
+            for name in ("setup-draft.json", "openbao-init.json", "setup-code"):
+                assert not (tmp_path / name).exists()
+            assert (await c.post("/api/setup/storage", json=storage, headers=h)).status_code == 403
 
     asyncio.run(scenario())
 
@@ -400,7 +550,8 @@ def test_setup_account_step(env, tmp_path):
 
         async def get_stage():
             return stage["v"]
-        st = SimpleNamespace(gate=gate, container=c, stage=get_stage, error=None)
+        st = SimpleNamespace(gate=gate, container=c, stage=get_stage, error=None, draft=SetupDraft(str(tmp_path)),
+                             storage_editable=False)
         app = FastAPI()
         app.add_exception_handler(DomainError, main.domain_error)
         app.include_router(routes_setup.router)
@@ -412,6 +563,7 @@ def test_setup_account_step(env, tmp_path):
             r = await h.post("/api/setup/account", json=body, headers={"x-setup-code": code})
             assert r.status_code == 200, r.text
             assert r.json()["user"]["role"] == "admin" and "nc_session=" in r.headers["set-cookie"]
+            assert r.json()["openbao"] is None  # this OpenBao was not initialised by the wizard
         assert await e.settings.get("auth_mode") == "local"
         assert await e.settings.get("public_base_url") == "https://nc.test"
         assert not (tmp_path / "setup-code").exists()  # the code is gone with the wizard

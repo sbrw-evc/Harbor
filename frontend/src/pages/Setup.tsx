@@ -65,7 +65,7 @@ function Shell({ children, wide }: { children: ReactNode; wide?: boolean }) {
 function Steps({ current, reached, compact, canPick, onPick }: {
   current: number; reached: number; compact?: boolean; canPick: (i: number) => boolean; onPick: (i: number) => void;
 }) {
-  const names = [t("Setup code"), t("Storage"), t("OpenBao keys"), t("Sign-in")];
+  const names = [t("Setup code"), t("Storage"), t("Sign-in"), t("OpenBao keys")];
   return (
     <motion.ol layout="position" className="mb-6 flex gap-2 text-xs">
       {names.map((n, i) => {
@@ -186,22 +186,30 @@ function BackButton({ onBack }: { onBack?: () => void }) {
   );
 }
 
-function StorageStep({ code, onDone, onBack }: { code: string; onDone: (secrets: BaoSecrets | null) => void; onBack?: () => void }) {
+/** The storage is only checked here and kept by the server as a draft: the last step applies it, so one may come back
+ * and change it. A secret the server keeps is not sent back; left empty, it stays as it is. */
+function StorageStep({ code, onDone, onBack }: { code: string; onDone: () => void; onBack?: () => void }) {
   const state = useQuery({ queryKey: ["setup"], queryFn: () => api.setup.state() });
+  const saved = useQuery({ queryKey: ["setup-storage", code], queryFn: () => api.setup.storageDraft(code), staleTime: Infinity });
   const d = state.data?.defaults;
   const [form, setForm] = useState<StorageInput | null>(null);
   const [check, setCheck] = useState<StorageCheck | null>(null);
   const [busy, setBusy] = useState<"" | "check" | "save">("");
+  const kept = saved.data?.kept ?? {};
 
   useEffect(() => {
-    if (d && !form) setForm({
+    if (form || !saved.isFetched) return;
+    const draft = saved.data?.draft;
+    if (draft) setForm(draft);
+    else if (d) setForm({
       postgres: { ...d.postgres, password: "" },
       clickhouse: { ...d.clickhouse, password: "" },
       openbao: { addr: d.openbao.addr, mode: "bundled", root_token: "", role_id: "", secret_id: "", mount: "amnezia" },
     });
-  }, [d, form]);
+  }, [d, form, saved.isFetched, saved.data]);
 
   if (!form) return <div className="flex items-center gap-2 py-6 text-sm text-slate-400"><Loader2 size={16} className="animate-spin" /> {t("Loading…")}</div>;
+  const keptHint = (key: string) => (kept[key] ? t("kept on the server; leave empty to keep it") : undefined);
 
   // A change makes the last check stale: its results go away.
   const edit = (next: StorageInput) => { setForm(next); setCheck(null); };
@@ -220,13 +228,13 @@ function StorageStep({ code, onDone, onBack }: { code: string; onDone: (secrets:
         if (r.postgres.ok && !r.postgres.timescaledb) notify.warning("TimescaleDB", t("TimescaleDB is not available: time series are kept in ordinary tables."));
         setBusy("");
       } else {
-        const r = await api.setup.storage(code, form);
-        notify.success(t("The storage is saved"), t("Harbor keeps its data in PostgreSQL, ClickHouse and OpenBao."));
-        if (r.openbao) notify.warning(t("OpenBao is initialised"), t("Save its root token and recovery key: they are shown once."));
-        onDone(r.openbao);
+        await api.setup.storage(code, form);
+        notify.success(t("The storage is checked"), t("It is applied with the last step of the wizard."));
+        setBusy("");  // the step stays mounted: one may come back to it
+        onDone();
       }
     } catch (err) {
-      notify.error(what === "check" ? t("The check failed") : t("The storage is not saved"), (err as Error).message);
+      notify.error(what === "check" ? t("The check failed") : t("The storage is not accepted"), (err as Error).message);
       setBusy("");
     }
   };
@@ -234,6 +242,7 @@ function StorageStep({ code, onDone, onBack }: { code: string; onDone: (secrets:
   return (
     <form className="space-y-5" onSubmit={(e) => { e.preventDefault(); void run("save"); }}>
       <p className="text-sm text-slate-400">{t("Where Harbor keeps its data. The values of the bundled services are filled in; install.sh printed their passwords. Passwords are kept in OpenBao, not on disk.")}</p>
+      <p className="text-xs text-slate-500">{t("Nothing is applied yet: the storage is checked now and applied with the last step, together with the sign-in.")}</p>
       <fieldset className="space-y-3">
         <legend className="mb-2 flex items-center gap-2 font-medium text-slate-200"><Database size={15} /> PostgreSQL (TimescaleDB)</legend>
         <div className="grid gap-3 sm:grid-cols-4">
@@ -241,7 +250,7 @@ function StorageStep({ code, onDone, onBack }: { code: string; onDone: (secrets:
           <Field label={t("Port")}><input className="input mono" inputMode="numeric" value={form.postgres.port} onChange={(e) => pg("port", Number(e.target.value) || 0)} /></Field>
           <Field label={t("Database")}><input className="input mono" value={form.postgres.database} onChange={(e) => pg("database", e.target.value)} /></Field>
           <div className="sm:col-span-2"><Field label={t("User")}><input className="input mono" value={form.postgres.user} onChange={(e) => pg("user", e.target.value)} /></Field></div>
-          <div className="sm:col-span-2"><Field label={t("Password")}><PasswordInput value={form.postgres.password} onChange={(e) => pg("password", e.target.value)} /></Field></div>
+          <div className="sm:col-span-2"><Field label={t("Password")} hint={keptHint("postgres.password")}><PasswordInput value={form.postgres.password} onChange={(e) => pg("password", e.target.value)} /></Field></div>
         </div>
       </fieldset>
       <fieldset className="space-y-3">
@@ -250,7 +259,7 @@ function StorageStep({ code, onDone, onBack }: { code: string; onDone: (secrets:
           <div className="sm:col-span-2"><Field label={t("Address")}><input className="input mono" value={form.clickhouse.url} onChange={(e) => ch("url", e.target.value)} /></Field></div>
           <div className="sm:col-span-2"><Field label={t("Database")}><input className="input mono" value={form.clickhouse.database} onChange={(e) => ch("database", e.target.value)} /></Field></div>
           <div className="sm:col-span-2"><Field label={t("User")}><input className="input mono" value={form.clickhouse.user} onChange={(e) => ch("user", e.target.value)} /></Field></div>
-          <div className="sm:col-span-2"><Field label={t("Password")}><PasswordInput value={form.clickhouse.password} onChange={(e) => ch("password", e.target.value)} /></Field></div>
+          <div className="sm:col-span-2"><Field label={t("Password")} hint={keptHint("clickhouse.password")}><PasswordInput value={form.clickhouse.password} onChange={(e) => ch("password", e.target.value)} /></Field></div>
         </div>
       </fieldset>
       <fieldset className="space-y-3">
@@ -262,11 +271,11 @@ function StorageStep({ code, onDone, onBack }: { code: string; onDone: (secrets:
           hint={t("An AppRole with read, write and list rights on a KV v2 mount.")} />
         <motion.div key={form.openbao.mode} initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.18 }}>
           {form.openbao.mode === "bundled" ? (
-            <Field label={t("Root token (only if initialised before)")}><PasswordInput value={form.openbao.root_token ?? ""} onChange={(e) => bao("root_token", e.target.value)} /></Field>
+            <Field label={t("Root token (only if initialised before)")} hint={keptHint("openbao.root_token")}><PasswordInput value={form.openbao.root_token ?? ""} onChange={(e) => bao("root_token", e.target.value)} /></Field>
           ) : (
             <div className="grid gap-3 sm:grid-cols-3">
               <Field label="role_id"><input className="input mono" value={form.openbao.role_id ?? ""} onChange={(e) => bao("role_id", e.target.value)} /></Field>
-              <Field label="secret_id"><PasswordInput value={form.openbao.secret_id ?? ""} onChange={(e) => bao("secret_id", e.target.value)} /></Field>
+              <Field label="secret_id" hint={keptHint("openbao.secret_id")}><PasswordInput value={form.openbao.secret_id ?? ""} onChange={(e) => bao("secret_id", e.target.value)} /></Field>
               <Field label={t("KV mount")}><input className="input mono" value={form.openbao.mount ?? ""} onChange={(e) => bao("mount", e.target.value)} /></Field>
             </div>
           )}
@@ -288,7 +297,7 @@ function StorageStep({ code, onDone, onBack }: { code: string; onDone: (secrets:
         <motion.button whileTap={{ scale: 0.97 }} type="button" className="btn-ghost" disabled={!!busy} onClick={() => run("check")}>
           <BusyIcon busy={busy === "check"} /> {t("Check")}
         </motion.button>
-        <motion.button whileTap={{ scale: 0.97 }} className="btn-primary" disabled={!!busy || !form.postgres.password || !form.clickhouse.password}>
+        <motion.button whileTap={{ scale: 0.97 }} className="btn-primary" disabled={!!busy || (!form.postgres.password && !kept["postgres.password"]) || (!form.clickhouse.password && !kept["clickhouse.password"])}>
           <BusyIcon busy={busy === "save"} /> {t("Save and continue")}
         </motion.button>
       </div>
@@ -296,8 +305,8 @@ function StorageStep({ code, onDone, onBack }: { code: string; onDone: (secrets:
   );
 }
 
-/** The root token and the recovery key of a freshly initialised OpenBao. The step stays until the user confirms that
- * they are saved: the stage of the server has moved on already, so nothing else may close it. */
+/** The root token and the recovery key of the OpenBao the last step initialised. The step stays until the user confirms
+ * that they are saved: the wizard is done on the server already, so nothing else may close it. */
 function SecretsStep({ secrets, onDone }: { secrets: BaoSecrets; onDone: () => void }) {
   const [saved, setSaved] = useState(false);
   const savedRef = useRef(saved);
@@ -359,7 +368,11 @@ function SecretsStep({ secrets, onDone }: { secrets: BaoSecrets; onDone: () => v
   );
 }
 
-function AccountStep({ code, onBack }: { code: string; onBack?: () => void }) {
+/** The last step: everything the wizard was given — the storage, OpenBao, the sign-in — is applied by its button.
+ * `onApplying` tells the page to hold on: the server reports the wizard done before this answer comes. */
+function AccountStep({ code, onBack, onApplying, onApplied }: {
+  code: string; onBack?: () => void; onApplying: (on: boolean) => void; onApplied: (keys: BaoSecrets | null, finish: () => void) => void;
+}) {
   const bootstrap = useAuth((s) => s.bootstrap);
   const [mode, setMode] = useState<AuthMode>("local");
   const [base, setBase] = useState(window.location.origin);
@@ -371,6 +384,7 @@ function AccountStep({ code, onBack }: { code: string; onBack?: () => void }) {
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     setBusy(true);
+    onApplying(true);
     try {
       const r = await api.setup.account(code, mode === "local"
         ? { mode, public_base_url: base, username: form.username, display_name: form.display_name, email: form.email, password: form.password }
@@ -380,17 +394,18 @@ function AccountStep({ code, onBack }: { code: string; onBack?: () => void }) {
       } catch {
         /* storage is off */
       }
+      if (r.openbao) notify.warning(t("OpenBao is initialised"), t("Save its root token and recovery key: they are shown once."));
       if (mode === "local") {
-        notify.success(t("The administrator {name} is created", { name: form.username }), t("Harbor is set up: signing in…"));
-        await bootstrap();
-        window.location.replace("/");
+        notify.success(t("The administrator {name} is created", { name: form.username }), r.openbao ? t("Harbor is set up.") : t("Harbor is set up: signing in…"));
+        onApplied(r.openbao, () => { void bootstrap().then(() => window.location.replace("/")); });
       } else {
-        notify.success(t("Keystone is connected"), t("Harbor is set up: going to Keystone to sign in…"));
-        window.location.assign(r.redirect);
+        notify.success(t("Keystone is connected"), r.openbao ? t("Harbor is set up.") : t("Harbor is set up: going to Keystone to sign in…"));
+        onApplied(r.openbao, () => window.location.assign(r.redirect));
       }
     } catch (err) {
       notify.error(mode === "local" ? t("The administrator is not created") : t("Keystone is not connected"), (err as Error).message);
       setBusy(false);
+      onApplying(false);
     }
   };
 
@@ -431,6 +446,7 @@ function AccountStep({ code, onBack }: { code: string; onBack?: () => void }) {
           </div>
         )}
       </motion.div>
+      <p className="text-xs text-slate-500">{t("The button applies everything the wizard was given: the storage, OpenBao and the sign-in. Until then nothing is saved.")}</p>
       <div className="flex items-center gap-2">
         <BackButton onBack={onBack} />
         <motion.button whileTap={{ scale: 0.98 }} className="btn-primary flex-1" disabled={busy || (mode === "local" ? !form.username || !form.password || form.password !== form.repeat : !form.key)}>
@@ -441,39 +457,42 @@ function AccountStep({ code, onBack }: { code: string; onBack?: () => void }) {
   );
 }
 
-/** The setup wizard: the setup code, the storage, the keys of OpenBao, the sign-in. After it the "First steps" of the
- * overview take over. */
+/** The setup wizard: the setup code, the storage, the sign-in, the keys of OpenBao. The storage is only kept by the
+ * server as a draft until the button of the sign-in step applies everything; the keys of an OpenBao initialised then
+ * are shown last. After it the "First steps" of the overview take over. */
 export default function SetupPage() {
-  const state = useQuery({ queryKey: ["setup"], queryFn: () => api.setup.state(), refetchInterval: (q) => (q.state.data?.stage === "storage" ? false : 5000) });
+  // Not polled while the last step applies or its keys are shown: the server reports the wizard done by then.
+  const [holding, setHolding] = useState(false);
+  const state = useQuery({ queryKey: ["setup"], queryFn: () => api.setup.state(), refetchInterval: (q) => (holding || q.state.data?.stage === "storage" ? false : 5000) });
   const [code, setCode] = useState<string | null>(null);
-  // Kept here, not in the storage step: the stage of the server moves on as soon as the storage is saved, and the keys
-  // must stay on the screen until the user confirms they are saved.
-  const [secrets, setSecrets] = useState<BaoSecrets | null>(null);
-  // The answer of the storage step says the stage moved on; a reading of the stage right after it may still come from a
-  // process that has not started on the new storage yet, and must not bring the storage step back.
+  // The answer of the storage step says the stage moved on; a reading of the stage made before it must not bring the
+  // storage step back.
   const [storageSaved, setStorageSaved] = useState(false);
-  const [keysSaved, setKeysSaved] = useState(false);
+  // The keys of OpenBao from the last step, and what follows once the user has saved them.
+  const [applied, setApplied] = useState<{ keys: BaoSecrets; finish: () => void } | null>(null);
   // A step the user went back to; null — the furthest step reached.
   const [view, setView] = useState<number | null>(null);
   const stage = state.data?.stage;
 
-  if (stage === "done") return <Navigate to="/" replace />;
+  if (stage === "done" && !holding) return <Navigate to="/" replace />;
   if (!state.data) return (
     <MotionConfig reducedMotion="user">
       <Shell><div className="flex items-center gap-2 py-6 text-sm text-slate-400"><Loader2 size={16} className="animate-spin" /> {t("Loading…")}</div></Shell>
     </MotionConfig>
   );
-  const reached = !code ? 0 : stage === "storage" && !storageSaved ? 1 : secrets && !keysSaved ? 2 : 3;
-  // Back is possible where nothing is lost: from the storage to the setup code, and from the sign-in to the keys of
-  // OpenBao shown in this browser. The saved storage itself cannot be edited again: the server has moved on.
-  const canVisit = (i: number) => i === reached || (i === 0 && reached === 1) || (i === 2 && reached === 3 && !!secrets);
+  const editable = state.data.storage_editable ?? stage === "storage";
+  const reached = !code ? 0 : applied ? 3 : stage === "storage" && !storageSaved ? 1 : 2;
+  // Back is possible until the last step applies everything: to the setup code, and to the storage while the server
+  // keeps it as a draft. Nothing goes back from the keys: everything is applied by then.
+  const canVisit = (i: number) => i === reached || (reached < 3 && i < reached && (i === 0 || editable));
   const step = view !== null && canVisit(view) ? view : reached;
   const go = (i: number) => setView(i === reached ? null : i);
   const panes: [number, boolean, ReactNode][] = [
     [0, true, <CodeStep onDone={(c) => { setCode(c); setView(null); void state.refetch(); }} />],
-    [1, !!code && !storageSaved, code && <StorageStep code={code} onBack={() => go(0)} onDone={(s) => { setSecrets(s); setStorageSaved(true); setView(null); void state.refetch(); }} />],
-    [2, !!secrets, secrets && <SecretsStep secrets={secrets} onDone={() => { setKeysSaved(true); setView(null); }} />],
-    [3, reached === 3, code && <AccountStep code={code} onBack={secrets ? () => go(2) : undefined} />],
+    [1, !!code && editable, code && <StorageStep code={code} onBack={() => go(0)} onDone={() => { setStorageSaved(true); setView(null); void state.refetch(); }} />],
+    [2, reached === 2, code && <AccountStep code={code} onBack={() => go(editable ? 1 : 0)} onApplying={setHolding}
+      onApplied={(keys, finish) => (keys ? setApplied({ keys, finish }) : finish())} />],
+    [3, !!applied, applied && <SecretsStep secrets={applied.keys} onDone={applied.finish} />],
   ];
   return (
     <MotionConfig reducedMotion="user">
