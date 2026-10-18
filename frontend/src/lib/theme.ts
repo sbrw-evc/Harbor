@@ -24,7 +24,7 @@ export function setTheme(next: Theme, from?: { x: number; y: number }) {
   const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
   if (!from || !doc.startViewTransition || reduce) return apply(next);
   const r = Math.hypot(Math.max(from.x, innerWidth - from.x), Math.max(from.y, innerHeight - from.y));
-  doc.startViewTransition(() => apply(next)).ready.then(() =>
+  void doc.startViewTransition(() => apply(next)).ready.then(() =>
     document.documentElement.animate(
       { clipPath: [`circle(0 at ${from.x}px ${from.y}px)`, `circle(${r}px at ${from.x}px ${from.y}px)`] },
       { duration: 420, easing: "cubic-bezier(.22,1,.36,1)", pseudoElement: "::view-transition-new(root)" },

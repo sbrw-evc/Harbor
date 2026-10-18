@@ -21,12 +21,12 @@ def parse_duration(value: str) -> int | None:
     if not value:
         return None
     total = 0
-    clock = re.search(r"(\d+):(\d+):(\d+)", value)
+    clock = re.search(r"(\d++):(\d++):(\d++)", value)
     if clock:
         h, m, s = (int(x) for x in clock.groups())
         total += h * 3600 + m * 60 + s
         value = value[:clock.start()]
-    for n, unit in re.findall(r"(\d+)(ms|w|d|h|m|s)", value):
+    for n, unit in re.findall(r"(\d++)(ms|w|d|h|m|s)", value):
         total += int(n) * _UNITS[unit]
     return total
 

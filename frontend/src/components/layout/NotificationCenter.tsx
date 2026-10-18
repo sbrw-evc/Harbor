@@ -58,7 +58,7 @@ export default function NotificationCenter({ open, onClose }: { open: boolean; o
     <AnimatePresence>
       {open && (
         <motion.div className="fixed inset-0 z-50" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-          <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px]" onClick={onClose} />
+          <button type="button" tabIndex={-1} aria-label={t("Close")} className="absolute inset-0 cursor-default bg-black/40 backdrop-blur-[2px]" onClick={onClose} />
           <motion.aside initial={{ x: 420 }} animate={{ x: 0 }} exit={{ x: 420 }} transition={{ type: "spring", stiffness: 320, damping: 32 }}
             className="absolute right-0 top-0 flex h-full w-full max-w-[400px] flex-col border-l border-base-700 bg-base-900 shadow-2xl">
             <div className="flex items-center gap-2 border-b border-base-700 px-4 py-3">

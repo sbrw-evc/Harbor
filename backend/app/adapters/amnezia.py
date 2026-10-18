@@ -10,7 +10,7 @@ from ..domain.models import PeerEntry, PeerRuntime
 from ..ports import CommandRunner, ConfigCodec, VpnServerGateway
 
 DISABLED_MARK = "#DISABLED# "
-_KV = re.compile(r"\s*([A-Za-z0-9]+)\s*=\s*(.*?)\s*$")
+_KV = re.compile(r"\s*+([A-Za-z0-9]++)\s*+=(.*)")  # the value is stripped by parse_kv: no backtracking
 
 
 def parse_kv(lines: list[str]) -> dict[str, str]:
@@ -20,7 +20,7 @@ def parse_kv(lines: list[str]) -> dict[str, str]:
             continue
         m = _KV.match(line)
         if m:
-            out[m.group(1)] = m.group(2)
+            out[m.group(1)] = m.group(2).strip()
     return out
 
 
@@ -92,12 +92,14 @@ class AmneziaDockerGateway(VpnServerGateway):
         AwgConfigCodec().parse(text)
         ts = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
         bk = f"{self._dir}/backups"
-        tmp = f"/tmp/panel-new/{self._iface}.conf"
+        # The new config waits next to the current one, in a folder only root writes to, not in the shared /tmp.
+        new = f"{self._dir}/panel-new"
+        tmp, stripped = f"{new}/{self._iface}.conf", f"{new}/{self._iface}.strip"
         await self._exec(
-            f"mkdir -p {bk} /tmp/panel-new && cp {self._conf} {bk}/{self._iface}.conf.{ts} && "
+            f"mkdir -p -m 700 {bk} {new} && cp {self._conf} {bk}/{self._iface}.conf.{ts} && "
             f"ls -1t {bk}/{self._iface}.conf.* | tail -n +51 | xargs -r rm -f && "
-            f"cat > {tmp} && {self._bin}-quick strip {tmp} > /tmp/{self._iface}.strip && "
-            f"cp {tmp} {self._conf} && {self._bin} syncconf {self._iface} /tmp/{self._iface}.strip", text)
+            f"cat > {tmp} && {self._bin}-quick strip {tmp} > {stripped} && "
+            f"cp {tmp} {self._conf} && {self._bin} syncconf {self._iface} {stripped}", text)
 
     async def runtime(self) -> dict[str, PeerRuntime]:
         out = await self._exec(f"{self._bin} show {self._iface} dump")

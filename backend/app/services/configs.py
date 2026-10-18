@@ -45,7 +45,7 @@ class ClientConfigBuilder:
 
     def _amnezia_key(self, name, conf, server, server_pub, psk, priv, pub, address, host, dns) -> str:
         obfs = server.obfuscation
-        dns_list = [d.strip() for d in dns.split(",") if d.strip()] or ["1.1.1.1"]
+        dns_list = [d.strip() for d in dns.split(",") if d.strip()] or ["1.1.1.1"]  # NOSONAR: a public resolver
         last = dict(obfs, config=conf, hostName=host, port=int(server.port or 0), mtu="1376",
                     client_ip=address.split("/")[0], client_priv_key=priv, client_pub_key=pub,
                     server_pub_key=server_pub, psk_key=psk or "", clientId=pub)

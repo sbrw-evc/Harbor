@@ -73,12 +73,15 @@ class OuiDatabase:
             self.load()
             return
         rows = await asyncio.to_thread(self._parse, r.text)
+        await asyncio.to_thread(self._save, rows)
+        self._map.update(rows)
+        log.info("OUI database: %d vendors", len(rows))
+
+    def _save(self, rows: dict[str, str]) -> None:
         os.makedirs(os.path.dirname(self._path), exist_ok=True)
         with open(self._path + ".tmp", "w", encoding="utf-8") as f:
             f.writelines(f"{k}\t{v}\n" for k, v in rows.items())
         os.replace(self._path + ".tmp", self._path)
-        self._map.update(rows)
-        log.info("OUI database: %d vendors", len(rows))
 
     @staticmethod
     def _parse(text: str) -> dict[str, str]:

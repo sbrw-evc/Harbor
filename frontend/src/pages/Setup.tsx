@@ -5,7 +5,7 @@ import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "rea
 import { Navigate } from "react-router-dom";
 import clsx from "clsx";
 import { api } from "@/lib/api";
-import { copyText } from "@/lib/hooks";
+import { copyText, useFocus } from "@/lib/hooks";
 import { notify } from "@/lib/notify";
 import type { AuthMode, StorageCheck, StorageInput } from "@/lib/types";
 import { useAuth } from "@/store/auth";
@@ -15,6 +15,13 @@ import PasswordInput from "@/components/ui/PasswordInput";
 import { t, tServer } from "@/i18n";
 
 const CODE_KEY = "nc_setup_code";
+
+/** "https://nc.example.com///" → "https://nc.example.com", without a regular expression that could backtrack. */
+function withoutTrailingSlashes(s: string): string {
+  let end = s.length;
+  while (end > 0 && s[end - 1] === "/") end--;
+  return s.slice(0, end);
+}
 const SPRING = { type: "spring", stiffness: 320, damping: 32 } as const;
 
 type BaoSecrets = { root_token: string; recovery_key: string };
@@ -107,6 +114,7 @@ function CodeStep({ onDone }: { onDone: (code: string) => void }) {
   const [code, setCode] = useState(readCode);
   const [busy, setBusy] = useState(false);
   const [shake, setShake] = useState(0);
+  const input = useFocus<HTMLInputElement>(shake + 1);
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     setBusy(true);
@@ -126,7 +134,7 @@ function CodeStep({ onDone }: { onDone: (code: string) => void }) {
       <p className="text-sm text-slate-300">{t("Harbor is not set up yet. Enter the one-time setup code: install.sh printed it, and it is in the log of the backend.")}</p>
       <pre className="mono overflow-x-auto rounded-lg bg-base-900 px-3 py-2 text-xs text-slate-300">docker compose logs backend | grep "setup code"</pre>
       <Field label={t("Setup code")}>
-        <motion.input key={shake} className="input mono text-center text-lg tracking-[.25em]" autoFocus value={code} maxLength={20}
+        <motion.input key={shake} ref={input} className="input mono text-center text-lg tracking-[.25em]" value={code} maxLength={20}
           animate={shake ? { x: [0, -8, 8, -6, 6, -3, 0] } : undefined} transition={{ duration: 0.4 }}
           onChange={(e) => setCode(e.target.value.toUpperCase())} />
       </Field>
@@ -200,7 +208,7 @@ function StorageStep({ code, onDone }: { code: string; onDone: (secrets: BaoSecr
   };
 
   return (
-    <form className="space-y-5" onSubmit={(e) => { e.preventDefault(); run("save"); }}>
+    <form className="space-y-5" onSubmit={(e) => { e.preventDefault(); void run("save"); }}>
       <p className="text-sm text-slate-400">{t("Where Harbor keeps its data. The values of the bundled services are filled in; install.sh printed their passwords. Passwords are kept in OpenBao, not on disk.")}</p>
       <fieldset className="space-y-3">
         <legend className="mb-2 flex items-center gap-2 font-medium text-slate-200"><Database size={15} /> PostgreSQL (TimescaleDB)</legend>
@@ -351,7 +359,7 @@ function AccountStep({ code }: { code: string }) {
   return (
     <form className="space-y-5" onSubmit={submit}>
       <Field label={t("Address of the panel")} hint={t("How people and Keystone reach it, e.g. https://nc.example.com")}>
-        <input className="input mono" value={base} onChange={(e) => setBase(e.target.value.replace(/\/+$/, ""))} />
+        <input className="input mono" value={base} onChange={(e) => setBase(withoutTrailingSlashes(e.target.value))} />
       </Field>
       <div className="space-y-2">
         <div className="text-sm font-medium text-slate-200">{t("How people sign in")}</div>
@@ -419,8 +427,8 @@ export default function SetupPage() {
         {/* Each step slides in when it comes. No exit animation: AnimatePresence mode="wait" around a step with its own
             animated parts kept the previous step on the screen for good. */}
         <motion.div key={step} initial={{ opacity: 0, x: 32 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.25, ease: "easeOut" }}>
-          {step === 0 && <CodeStep onDone={(c) => { setCode(c); state.refetch(); }} />}
-          {step === 1 && <StorageStep code={code!} onDone={(s) => { setSecrets(s); setStorageSaved(true); state.refetch(); }} />}
+          {step === 0 && <CodeStep onDone={(c) => { setCode(c); void state.refetch(); }} />}
+          {step === 1 && <StorageStep code={code!} onDone={(s) => { setSecrets(s); setStorageSaved(true); void state.refetch(); }} />}
           {step === 2 && <SecretsStep secrets={secrets!} onDone={() => setSecrets(null)} />}
           {step === 3 && <AccountStep code={code!} />}
         </motion.div>

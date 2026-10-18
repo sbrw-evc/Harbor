@@ -18,7 +18,7 @@ export function RouteChecker() {
     <Card title={t("Where will the traffic go")}>
       <form className="flex gap-2" onSubmit={(e) => { e.preventDefault(); if (target) check.mutate(target); }}>
         <input className="input" placeholder={t("youtube.com or 142.250.74.46")} value={target} onChange={(e) => setTarget(e.target.value)} />
-        <button className="btn-primary" disabled={check.isPending}><Search size={14} /></button>
+        <button type="submit" className="btn-primary" disabled={check.isPending}><Search size={14} /></button>
       </form>
       {result && (
         <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} className="mt-3 space-y-2 text-sm">
@@ -53,7 +53,7 @@ export function CustomPrefixes({ isAdmin }: { isAdmin: boolean }) {
         <form className="grid grid-cols-[1fr_1fr_auto] gap-2" onSubmit={(e) => { e.preventDefault(); add.mutate(undefined); }}>
           <input className="input mono" placeholder={t("example.com or 203.0.113.0/24")} value={target} onChange={(e) => setTarget(e.target.value)} />
           <input className="input" placeholder={t("Comment")} value={comment} onChange={(e) => setComment(e.target.value)} />
-          <button className="btn-primary" disabled={!target || add.isPending}><Plus size={14} /></button>
+          <button type="submit" className="btn-primary" disabled={!target || add.isPending}><Plus size={14} /></button>
         </form>
       )}
       {isAdmin && <p className="text-[11px] text-slate-500">{t("The router resolves the domain and keeps its addresses up to date; subdomains are added separately.")}</p>}

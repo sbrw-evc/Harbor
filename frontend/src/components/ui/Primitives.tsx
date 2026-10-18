@@ -134,7 +134,7 @@ export function Modal({ open, onClose, title, children, wide }: { open: boolean;
     <AnimatePresence>
       {open && (
         <motion.div className="fixed inset-0 z-50 flex items-center justify-center p-4" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-          <div className="absolute inset-0 backdrop-blur-[3px]" style={{ background: "var(--backdrop)" }} onClick={onClose} />
+          <button type="button" tabIndex={-1} aria-label={t("Close")} className="absolute inset-0 cursor-default backdrop-blur-[3px]" style={{ background: "var(--backdrop)" }} onClick={onClose} />
           <motion.div role="dialog" initial={{ opacity: 0, scale: 0.94, y: 16 }} animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.96, y: 8 }} transition={{ type: "spring", stiffness: 340, damping: 28 }}
             className={clsx("card relative max-h-[90vh] w-full overflow-auto shadow-2xl", wide ? "max-w-3xl" : "max-w-lg")}>

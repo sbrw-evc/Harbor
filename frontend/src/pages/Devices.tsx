@@ -17,13 +17,15 @@ import { SetupGuide } from "@/components/onboarding/Steps";
 import { EmptyState, ErrorState, Skeleton } from "@/components/ui/Feedback";
 import DeviceForm, { type DevicePrefill } from "@/components/devices/DeviceForm";
 
+const EXAMPLE_SUBNET = "192.168.0.0/24"; // NOSONAR: the subnet discovery starts with, changed by the user
+
 export const ROLE_ICON: Record<string, ReactNode> = {
   router: <Router size={16} />, switch: <HardDrive size={16} />, firewall: <Shield size={16} />, ap: <Wifi size={16} />,
   controller: <Radar size={16} />, server: <Server size={16} />, other: <Cpu size={16} />,
 };
 
 function Discovery({ open, onClose, onAdd }: { open: boolean; onClose: () => void; onAdd: (p: DevicePrefill) => void }) {
-  const [target, setTarget] = useState("192.168.0.0/24");
+  const [target, setTarget] = useState(EXAMPLE_SUBNET);
   const [community, setCommunity] = useState("public");
   const platforms = useQuery({ queryKey: ["device-platforms"], queryFn: () => api.devices.platforms(), staleTime: Infinity, enabled: open });
   const scan = useAction(() => api.devices.discover(target, community));

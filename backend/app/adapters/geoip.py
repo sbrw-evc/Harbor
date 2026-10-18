@@ -43,6 +43,13 @@ class DbIpGeoLocator(GeoLocator):
         except OSError:
             pass
 
+    def _install(self, compressed: bytes) -> None:
+        """Unpacks a downloaded database next to the current one and puts it in its place."""
+        tmp = f"{self._path}.{os.getpid()}.tmp"
+        with open(tmp, "wb") as f:
+            f.write(gzip.decompress(compressed))
+        shutil.move(tmp, self._path)
+
     async def refresh(self, max_age_days: int = 35) -> None:
         if os.path.exists(self._path):
             age = datetime.datetime.now().timestamp() - os.path.getmtime(self._path)
@@ -61,11 +68,7 @@ class DbIpGeoLocator(GeoLocator):
                     continue
                 if r.status_code != 200:
                     continue
-                tmp = f"{self._path}.{os.getpid()}.tmp"
-                data = await asyncio.to_thread(gzip.decompress, r.content)
-                with open(tmp, "wb") as f:
-                    f.write(data)
-                shutil.move(tmp, self._path)
+                await asyncio.to_thread(self._install, r.content)
                 self._open()
                 log.info("geoip database updated from %s", url)
                 return

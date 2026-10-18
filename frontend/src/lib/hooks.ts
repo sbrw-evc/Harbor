@@ -1,4 +1,5 @@
 import { useMutation, useQueryClient, type QueryKey } from "@tanstack/react-query";
+import { useEffect, useRef } from "react";
 import { notify } from "./notify";
 import { t } from "@/i18n";
 
@@ -26,4 +27,14 @@ export async function copyText(text: string, label = t("Copied")) {
   } catch {
     notify.error(t("Clipboard is not available"), t("HTTPS or localhost is required"));
   }
+}
+
+/** Puts the focus on the element when it appears, and again whenever `when` changes to a truthy value: the input a
+ * dialog or a form step is about. */
+export function useFocus<T extends HTMLElement>(when: unknown = true) {
+  const ref = useRef<T>(null);
+  useEffect(() => {
+    if (when) ref.current?.focus();
+  }, [when]);
+  return ref;
 }

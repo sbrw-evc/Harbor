@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { AlertTriangle } from "lucide-react";
 import { t } from "@/i18n";
+import { useFocus } from "@/lib/hooks";
 import { Modal } from "./Primitives";
 
 interface ConfirmRequest {
@@ -23,6 +24,7 @@ export function confirm(opts: Omit<ConfirmRequest, "resolve">): Promise<boolean>
 export function ConfirmHost() {
   const { req, set } = useConfirmStore();
   const close = (ok: boolean) => { req?.resolve(ok); set(null); };
+  const confirm = useFocus<HTMLButtonElement>(req);
   return (
     <Modal open={!!req} onClose={() => close(false)} title={req?.title ?? ""}>
       <div className="flex gap-3">
@@ -30,8 +32,8 @@ export function ConfirmHost() {
         <p className="select-text whitespace-pre-line text-sm leading-relaxed text-slate-300">{req?.message}</p>
       </div>
       <div className="mt-6 flex justify-end gap-2">
-        <button className="btn-ghost" onClick={() => close(false)}>{t("Cancel")}</button>
-        <button className={req?.danger ? "btn-danger" : "btn-primary"} onClick={() => close(true)} autoFocus>
+        <button type="button" className="btn-ghost" onClick={() => close(false)}>{t("Cancel")}</button>
+        <button type="button" className={req?.danger ? "btn-danger" : "btn-primary"} onClick={() => close(true)} ref={confirm}>
           {req?.confirmLabel ?? t("Confirm")}
         </button>
       </div>

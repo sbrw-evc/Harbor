@@ -217,7 +217,7 @@ export default function NetworkMap() {
 
   const unpinAll = () => {
     const ids = (data?.nodes ?? []).filter((n) => n.type === "device" && n.x != null).map((n) => n.device_id!);
-    savePos.mutate(Object.fromEntries(ids.map((i) => [i, null])), { onSuccess: () => { positions.current.clear(); topo.refetch(); } });
+    savePos.mutate(Object.fromEntries(ids.map((i) => [i, null])), { onSuccess: () => { positions.current.clear(); void topo.refetch(); } });
   };
   const s = data?.stats;
   const node = selected ? byId.get(selected) : undefined;

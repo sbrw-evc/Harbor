@@ -49,13 +49,14 @@ DEFAULTS = {
     "router_ssh_user": "admin",
     # The gateway: the host of the panel with the awg-client container, its LAN and the tunnel behind it.
     "gateway_ip": "",
-    "lan_cidr": "192.168.0.0/24",
+    # Starting values of private networks, changed in the panel (NOSONAR: defaults, not addresses to reach).
+    "lan_cidr": "192.168.0.0/24",  # NOSONAR
     "lan_if": "eth0",
-    "tunnel_net": "10.8.1.0/24",
+    "tunnel_net": "10.8.1.0/24",  # NOSONAR
     "port_forwards": "",
     # WireGuard on MikroTik.
     "mt_wg_iface": "wg-nc",
-    "mt_wg_network": "10.9.0.0/24",
+    "mt_wg_network": "10.9.0.0/24",  # NOSONAR: a starting value, changed in the panel
     "mt_wg_port": 51820,
     # WireGuard on OPNsense (REST API; the API key and secret are in OpenBao, opnsense/api).
     "opn_host": "",

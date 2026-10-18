@@ -17,6 +17,12 @@ const HISTORY_LIMIT = 100;
 const DURATION: Record<NoticeType, number> = { success: 4000, info: 5000, warning: 7000, error: 9000 };
 const DEDUPE_MS = 4000;
 
+/** randomUUID needs a secure context (HTTPS or localhost); getRandomValues works on a plain-HTTP LAN address too. */
+function newId(): string {
+  if (crypto.randomUUID) return crypto.randomUUID();
+  return Array.from(crypto.getRandomValues(new Uint32Array(4)), (n) => n.toString(16).padStart(8, "0")).join("-");
+}
+
 function load(): Notice[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -45,7 +51,7 @@ interface NotificationState {
 export const useNotifications = create<NotificationState>((set, get) => ({
   items: load(),
   add: (n) => {
-    const notice: Notice = { ...n, id: crypto.randomUUID?.() ?? String(Date.now() + Math.random()), ts: Date.now(), read: false };
+    const notice: Notice = { ...n, id: newId(), ts: Date.now(), read: false };
     const items = [notice, ...get().items].slice(0, HISTORY_LIMIT);
     save(items);
     set({ items });

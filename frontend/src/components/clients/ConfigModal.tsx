@@ -25,7 +25,7 @@ export default function ConfigModal({ clientId, server, onClose }: { clientId: s
   const q = useQuery({ queryKey: ["bundle", clientId], queryFn: () => api.clients.bundle(clientId!), enabled: !!clientId, staleTime: 0, gcTime: 0,
     refetchInterval: false, refetchOnWindowFocus: false });
   const hasKey = !!q.data?.amnezia_key;
-  const share = useAction((hours: number) => api.clients.share(clientId!, hours), { onSuccess: (r) => { setLink(r); copyText(r.url, t("Link copied")); } });
+  const share = useAction((hours: number) => api.clients.share(clientId!, hours), { onSuccess: (r) => { setLink(r); void copyText(r.url, t("Link copied")); } });
   const awg = <b className="text-fg">AmneziaWG</b>;
   const wg = <b className="text-fg">WireGuard</b>;
   const avpn = <b className="text-fg">Amnezia VPN</b>;

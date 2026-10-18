@@ -33,7 +33,7 @@ function KeyForm() {
   return (
     <form className="space-y-2" onSubmit={(e) => { e.preventDefault(); save.mutate(undefined); }}>
       <textarea className="input mono h-20 text-xs" placeholder="spa1.…" value={key} onChange={(e) => setKey(e.target.value.trim())} />
-      <button className="btn-primary btn-sm" disabled={!key.startsWith("spa1.") || save.isPending}><KeyRound size={13} /> {t("Save the key")}</button>
+      <button type="submit" className="btn-primary btn-sm" disabled={!key.startsWith("spa1.") || save.isPending}><KeyRound size={13} /> {t("Save the key")}</button>
       <p className="text-xs text-slate-500">{t("The key is kept in OpenBao and not shown again.")}</p>
     </form>
   );

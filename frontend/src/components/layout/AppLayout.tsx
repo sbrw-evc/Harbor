@@ -102,7 +102,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         <AnimatePresence>
           {mobileOpen && (
             <motion.div className="fixed inset-0 z-40 lg:hidden" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-              <div className="absolute inset-0" style={{ background: "var(--backdrop)" }} onClick={() => setMobileOpen(false)} />
+              <button type="button" tabIndex={-1} aria-label={t("Close")} className="absolute inset-0 cursor-default" style={{ background: "var(--backdrop)" }} onClick={() => setMobileOpen(false)} />
               <motion.div className="relative h-full w-[272px] bg-chrome pt-3" initial={{ x: -280 }} animate={{ x: 0 }} exit={{ x: -280 }}
                 transition={{ type: "spring", stiffness: 320, damping: 32 }}>
                 <Sidebar collapsed={false} onNavigate={() => setMobileOpen(false)} />

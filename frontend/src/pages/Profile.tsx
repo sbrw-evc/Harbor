@@ -26,11 +26,11 @@ function LocalSecurity() {
   const [code, setCode] = useState("");
   const change = useAction(() => api.auth.changePassword(pw.current, pw.next), {
     success: t("The password is changed; your other sessions are ended"), invalidate: [["sessions"]],
-    onSuccess: () => { setPw({ current: "", next: "", repeat: "" }); bootstrap(); },
+    onSuccess: () => { setPw({ current: "", next: "", repeat: "" }); void bootstrap(); },
   });
   const setup = useAction(() => api.auth.totpSetup(), { onSuccess: (r) => setTotp(r) });
   const enable = useAction(() => api.auth.totpEnable(code), {
-    success: t("Two-factor authentication is on"), onSuccess: () => { setTotp(null); setCode(""); bootstrap(); },
+    success: t("Two-factor authentication is on"), onSuccess: () => { setTotp(null); setCode(""); void bootstrap(); },
   });
   const disable = useAction(() => api.auth.totpDisable(), { success: t("Two-factor authentication is off"), onSuccess: () => bootstrap() });
   const submit = (e: FormEvent) => { e.preventDefault(); change.mutate(undefined); };
@@ -44,7 +44,7 @@ function LocalSecurity() {
           <Field label={t("Current password")}><PasswordInput autoComplete="current-password" value={pw.current} onChange={(e) => setPw({ ...pw, current: e.target.value })} /></Field>
           <Field label={t("New password")} hint={t("at least 10 characters, mixed case or digits")}><PasswordInput autoComplete="new-password" value={pw.next} onChange={(e) => setPw({ ...pw, next: e.target.value })} /></Field>
           <Field label={t("Repeat")} hint={mismatch ? <span className="text-red-300">{t("the passwords differ")}</span> : undefined}><PasswordInput autoComplete="new-password" value={pw.repeat} onChange={(e) => setPw({ ...pw, repeat: e.target.value })} /></Field>
-          <button className="btn-primary" disabled={!pw.current || !pw.next || mismatch || change.isPending}>{t("Change the password")}</button>
+          <button type="submit" className="btn-primary" disabled={!pw.current || !pw.next || mismatch || change.isPending}>{t("Change the password")}</button>
         </form>
       </Card>
       <Card title={<span className="flex items-center gap-2"><ShieldCheck size={14} /> {t("Two-factor authentication")}</span>}>

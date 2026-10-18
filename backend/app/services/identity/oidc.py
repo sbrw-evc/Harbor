@@ -120,7 +120,8 @@ class Provider:
         """Checks the signature (key from the JWKS), issuer, audience, expiry and nonce."""
         m = await self.discover()
         try:
-            header = jwt.get_unverified_header(id_token)
+            # Only the header, to pick the key from the JWKS: jwt.decode below verifies the signature with it.
+            header = jwt.get_unverified_header(id_token)  # NOSONAR
         except jwt.PyJWTError as e:
             raise OidcError(f"The ID token is malformed: {e}") from e
         if header.get("alg") not in algorithms:

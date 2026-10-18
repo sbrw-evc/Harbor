@@ -8,7 +8,8 @@ import re
 from .base import Endpoint, Interface, Neighbor, norm_ip, norm_mac, to_int
 
 IPV4 = re.compile(r"\b(\d{1,3}(?:\.\d{1,3}){3})\b")
-IFACE_TOKEN = re.compile(r"^(?:[A-Za-z][A-Za-z\-]*\s?\d[\w/.:\-]*|\d+(?:/\d+)*|[A-Za-z]+\d+[\w/.:\-]*|Po\d+|lag\d+)$")
+# Possessive quantifiers: none of the parts gives characters back, so a long token cannot make the match backtrack.
+IFACE_TOKEN = re.compile(r"^(?:[A-Za-z][A-Za-z\-]*+\s?\d[\w/.:\-]*+|\d++(?:/\d++)*+|[A-Za-z]++\d++[\w/.:\-]*+|Po\d++|lag\d++)$")
 NOT_IFACE = {"dynamic", "static", "learned", "arpa", "self", "cpu", "management", "permanent", "delete-on-reset",
              "secure", "drop", "router", "sticky", "d", "s", "l", "i", "igmp", "config", "mgmt"}
 DURATION_UNITS = {"year": 31536000, "week": 604800, "day": 86400, "hour": 3600, "minute": 60, "second": 1}
@@ -20,10 +21,10 @@ def parse_uptime(text: str) -> int | None:
         return None
     total = 0
     found = False
-    for n, unit in re.findall(r"(\d+)\s*(year|week|day|hour|minute|second)s?", text, re.I):
+    for n, unit in re.findall(r"(\d++)\s*+(year|week|day|hour|minute|second)s?", text, re.I):
         total += int(n) * DURATION_UNITS[unit.lower()]
         found = True
-    clock = re.search(r"(\d+):(\d{2}):(\d{2})", text)
+    clock = re.search(r"(\d++):(\d{2}):(\d{2})", text)
     if clock:
         h, m, s = (int(x) for x in clock.groups())
         total += h * 3600 + m * 60 + s

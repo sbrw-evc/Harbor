@@ -18,12 +18,13 @@ CH_URL = os.environ.get("CLICKHOUSE_URL", "http://clickhouse:8123")
 CH_USER = os.environ.get("CLICKHOUSE_USER", "amnezia")
 CH_PASSWORD = os.environ.get("CLICKHOUSE_PASSWORD", "")
 CH_DB = os.environ.get("CLICKHOUSE_DB", "flows")
+# The defaults below are starting values of private networks; collector.json of the panel replaces them.
 LAN = [ipaddress.ip_network(n.strip(), strict=False)
-       for n in os.environ.get("LAN_CIDR", "192.168.0.0/24").split(",") if n.strip()]
+       for n in os.environ.get("LAN_CIDR", "192.168.0.0/24").split(",") if n.strip()]  # NOSONAR
 # IPv6 unique local and link-local addresses never leave the site: always local.
 ALWAYS_LOCAL = [ipaddress.ip_network("fc00::/7"), ipaddress.ip_network("fe80::/10")]
 EXTRA_LAN: list = []
-GATEWAY = os.environ.get("GATEWAY_IP", "192.168.0.210")
+GATEWAY = os.environ.get("GATEWAY_IP", "192.168.0.210")  # NOSONAR
 VPN_HOST = os.environ.get("AWG_HOST", "")
 ROUTER = os.environ.get("ROUTER_HOST", "")
 CONFIG_FILE = os.environ.get("COLLECTOR_CONFIG", "/shared/collector.json")
@@ -61,7 +62,7 @@ def address(value):
 def column(a) -> str:
     """The text of an IPv6 column: IPv4 as ::ffff:a.b.c.d, which every ClickHouse version parses."""
     if a is None:
-        return "::ffff:0.0.0.0"
+        return "::ffff:0.0.0.0"  # NOSONAR: the unspecified address, the empty value of the column
     return f"::ffff:{a}" if a.version == 4 else str(a)
 
 
@@ -95,15 +96,18 @@ class GeoEnricher:
                         log.warning("geo download %s: %s", base, e)
                         continue
                     if r.status_code == 200:
-                        data = await asyncio.to_thread(gzip.decompress, r.content)
-                        with open(path + ".tmp", "wb") as f:
-                            f.write(data)
-                        os.replace(path + ".tmp", path)
+                        await asyncio.to_thread(self._install, path, r.content)
                         log.info("downloaded %s", base)
                         break
                 if os.path.exists(path):
                     self._open(kind, path)
         self._cache.clear()
+
+    @staticmethod
+    def _install(path: str, compressed: bytes) -> None:
+        with open(path + ".tmp", "wb") as f:
+            f.write(gzip.decompress(compressed))
+        os.replace(path + ".tmp", path)
 
     def _open(self, kind: str, path: str) -> None:
         self._readers[kind] = maxminddb.open_database(path)
@@ -260,12 +264,19 @@ class ClickHouseWriter:
         log.error("dropping %d flows after retries", len(rows))
 
 
-async def run() -> None:
-    load_config()
-    while not CH_PASSWORD and not os.path.exists(CONFIG_FILE):
-        log.info("waiting for %s: finish the setup wizard of the panel", CONFIG_FILE)
-        await asyncio.sleep(10)
+async def wait_for_config(every: float = 10) -> None:
+    """collector.json is written by the panel at the end of its setup wizard, in another container: nothing can tell
+    this process about it, so it looks again every few seconds."""
+    while True:
         load_config()
+        if CH_PASSWORD or os.path.exists(CONFIG_FILE):
+            return
+        log.info("waiting for %s: finish the setup wizard of the panel", CONFIG_FILE)
+        await asyncio.sleep(every)
+
+
+async def run() -> None:
+    await wait_for_config()
     geo = GeoEnricher(GEO_DIR)
     await geo.refresh()
     classify = Classifier(geo)

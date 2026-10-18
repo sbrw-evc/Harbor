@@ -19,7 +19,7 @@ class LiveQuerySync {
     const now = Date.now();
     if (now - (this.last.get(event) ?? 0) < this.minIntervalMs) return;
     this.last.set(event, now);
-    for (const key of EVENT_QUERIES[event] ?? []) this.qc.invalidateQueries({ queryKey: [key] });
+    for (const key of EVENT_QUERIES[event] ?? []) void this.qc.invalidateQueries({ queryKey: [key] });
   }
 
   start(): () => void {
@@ -27,7 +27,7 @@ class LiveQuerySync {
     let wasConnected = true;
 
     offs.push(live.onStatus((ok) => {
-      if (ok && !wasConnected) this.qc.invalidateQueries();
+      if (ok && !wasConnected) void this.qc.invalidateQueries();
       wasConnected = ok;
     }));
     return () => offs.forEach((off) => off());

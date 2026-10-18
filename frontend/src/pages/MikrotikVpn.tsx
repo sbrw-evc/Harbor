@@ -1,26 +1,17 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
-import { Router, Save, Users, Wrench } from "lucide-react";
-import { Fragment, useEffect, useState, type ReactNode } from "react";
-import clsx from "clsx";
+import { Router, Users, Wrench } from "lucide-react";
+import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
-import { copyText, useAction } from "@/lib/hooks";
+import { useAction } from "@/lib/hooks";
 import { t } from "@/i18n";
 import { useAuth } from "@/store/auth";
-import { Badge, Card, Field, Page, PageHeader } from "@/components/ui/Primitives";
+import { Badge, Card, Page, PageHeader } from "@/components/ui/Primitives";
 import { ErrorState, Skeleton } from "@/components/ui/Feedback";
 import { confirm } from "@/components/ui/Confirm";
+import { ClientConfigCard, PublicKey, Row, rich } from "@/components/vpn/WireguardServer";
 
-/** A translated text with React nodes in place of its {placeholders}. */
-const rich = (s: string, parts: Record<string, ReactNode>) =>
-  s.split(/(\{\w+\})/).map((p, i) => {
-    const m = /^\{(\w+)\}$/.exec(p);
-    return <Fragment key={i}>{m && m[1] in parts ? parts[m[1]] : p}</Fragment>;
-  });
-
-function Row({ label, children }: { label: string; children: ReactNode }) {
-  return <div className="flex justify-between gap-3"><span className="text-slate-500">{label}</span><span className="text-right">{children}</span></div>;
-}
+const DEFAULT_NETWORK = "10.9.0.0/24"; // NOSONAR: the default client network, shown until the router reports its own
 
 export default function MikrotikVpn() {
   const isAdmin = useAuth((s) => s.can("admin"));
@@ -72,45 +63,22 @@ export default function MikrotikVpn() {
               <Row label={t("Router address")}><span className="mono">{i.server_ip}</span></Row>
               <Row label={t("Public address")}><span className="mono">{i.public_address || "—"}</span></Row>
               <Row label={t("Peers")}>{i.peers_total} <span className="text-slate-500">{t("({n} blocked)", { n: i.peers_disabled })}</span></Row>
-              {i.public_key && <>
-                <div className="pt-2 text-slate-500">{t("Public key")}</div>
-                <button className="mono break-all text-left text-[11px] text-slate-300 hover:text-fg" title={t("Copy to the clipboard")} onClick={() => copyText(i.public_key!)}>{i.public_key}</button>
-              </>}
+              <PublicKey value={i.public_key} />
             </div>
           ) : <Skeleton className="h-56" />}
         </Card>
 
-        <Card className="xl:col-span-2" title={t("Client config settings")}>
-          {i ? (
-            <form className="space-y-4" onSubmit={(e) => { e.preventDefault(); save.mutate(undefined); }}>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <Field label={t("Connection address")} hint={t("empty — the public IP of the router ({ip}); a domain can be set", { ip: i.public_address || t("not detected") })}>
-                  <input className="input mono" value={host} disabled={!isAdmin} onChange={(e) => setHost(e.target.value)} placeholder={i.public_address} />
-                </Field>
-                <Field label="DNS" hint={t("empty — the DNS of the router ({ip})", { ip: i.server_ip })}>
-                  <input className="input mono" value={dns} disabled={!isAdmin} onChange={(e) => setDns(e.target.value)} placeholder={i.server_ip} />
-                </Field>
-              </div>
-              <Field label="AllowedIPs" hint={t("what the client sends into the tunnel; changes apply to configs downloaded again")}>
-                <div className="space-y-2">
-                  <input className="input mono" value={allowed} disabled={!isAdmin} onChange={(e) => setAllowed(e.target.value)} />
-                  <div className="flex flex-wrap gap-2">
-                    {presets.map((p) => (
-                      <button type="button" key={p.value} disabled={!isAdmin} className={clsx("chip", allowed === p.value && "chip-on")} onClick={() => setAllowed(p.value)}>{p.label}</button>
-                    ))}
-                  </div>
-                </div>
-              </Field>
-              {isAdmin && <div className="flex justify-end"><button className="btn-primary" disabled={save.isPending}><Save size={14} /> {t("Save")}</button></div>}
-            </form>
-          ) : <Skeleton className="h-56" />}
-        </Card>
+        <ClientConfigCard ready={!!i} isAdmin={isAdmin} saving={save.isPending} onSave={() => save.mutate(undefined)}
+          host={{ value: host, onChange: setHost, placeholder: i?.public_address,
+            hint: t("empty — the public IP of the router ({ip}); a domain can be set", { ip: i?.public_address || t("not detected") }) }}
+          dns={{ value: dns, onChange: setDns, placeholder: i?.server_ip, hint: t("empty — the DNS of the router ({ip})", { ip: i?.server_ip ?? "—" }) }}
+          allowed={allowed} onAllowed={setAllowed} presets={presets} />
       </div>
 
       <Card title={t("How it works")}>
         <ul className="list-disc space-y-1.5 pl-5 text-sm text-slate-300">
           <li>{rich(t("Clients connect to the home router over WireGuard on port {port} and get an address from {network}."), {
-            port: <span className="mono">{i?.port ?? 51820}/udp</span>, network: <span className="mono">{i?.network ?? "10.9.0.0/24"}</span> })}</li>
+            port: <span className="mono">{i?.port ?? 51820}/udp</span>, network: <span className="mono">{i?.network ?? DEFAULT_NETWORK}</span> })}</li>
           <li>{t("They can reach the local network, and the internet goes through the provider; sites from the routing list, as for LAN devices, go through Amnezia.")}</li>
           <li>{t("Creating, blocking, quotas, access periods, traffic, the map and config links work the same as for Amnezia clients — on the “VPN clients” page choose the MikroTik server.")}</li>
           <li>{t("The config is plain WireGuard: it imports into the WireGuard and Amnezia VPN apps (QR or a .conf file).")}</li>

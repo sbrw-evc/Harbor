@@ -35,14 +35,18 @@ class SshKeyProvider:
             data = await self._secrets.get(KEY_SECRET)
             if not data or "private_key" not in data:
                 raise ExternalServiceError("SSH key not found in OpenBao (infra/ssh)")
-            os.makedirs(os.path.dirname(self._path), mode=0o700, exist_ok=True)
-            tmp = f"{self._path}.{os.getpid()}"
-            fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-            with os.fdopen(fd, "w") as f:
-                f.write(data["private_key"].rstrip("\n") + "\n")
-            os.replace(tmp, self._path)
+            await asyncio.to_thread(self._write, data["private_key"])
             self._ready = True
         return self._path
+
+    def _write(self, private_key: str) -> None:
+        """The key file for ssh: readable by the panel only, replaced in one step."""
+        os.makedirs(os.path.dirname(self._path), mode=0o700, exist_ok=True)
+        tmp = f"{self._path}.{os.getpid()}"
+        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, "w") as f:
+            f.write(private_key.rstrip("\n") + "\n")
+        os.replace(tmp, self._path)
 
 
 class SshRunner(CommandRunner):

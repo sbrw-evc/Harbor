@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from "react";
 import clsx from "clsx";
+import { useFocus } from "@/lib/hooks";
 import type { ClientInput } from "@/lib/api";
 import type { ServerKind, VpnClient, VpnServer } from "@/lib/types";
 import { k, t } from "@/i18n";
@@ -24,6 +25,7 @@ export default function ClientForm({ initial, submitLabel, busy, onSubmit, serve
   const [server, setServer] = useState<ServerKind>("amnezia");
   const current = servers?.find((s) => s.kind === server);
   const [name, setName] = useState(initial?.name ?? "");
+  const nameInput = useFocus<HTMLInputElement>();
   const [owner, setOwner] = useState(initial?.owner ?? "");
   const [contact, setContact] = useState(initial?.contact ?? "");
   const [tags, setTags] = useState((initial?.tags ?? []).join(", "));
@@ -58,7 +60,7 @@ export default function ClientForm({ initial, submitLabel, busy, onSubmit, serve
         </Field>
       )}
       <div className="grid gap-4 sm:grid-cols-2">
-        <Field label={t("Name *")}><input className="input" required autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder={t("Anna's iPhone")} /></Field>
+        <Field label={t("Name *")}><input ref={nameInput} className="input" required value={name} onChange={(e) => setName(e.target.value)} placeholder={t("Anna's iPhone")} /></Field>
         <Field label={t("Owner")}><input className="input" value={owner} onChange={(e) => setOwner(e.target.value)} placeholder={t("Anna")} /></Field>
         <Field label={t("Contact")}><input className="input" value={contact} onChange={(e) => setContact(e.target.value)} placeholder="@telegram / email" /></Field>
         <Field label={t("Tags")} hint={t("comma-separated: family, work")}><input className="input" value={tags} onChange={(e) => setTags(e.target.value)} /></Field>
@@ -77,7 +79,7 @@ export default function ClientForm({ initial, submitLabel, busy, onSubmit, serve
           onChange={(v) => setQuota(v === null ? "" : String(v))} />
       </Field>
       <Field label={t("Note")}><textarea className="input min-h-[70px]" value={note} onChange={(e) => setNote(e.target.value)} /></Field>
-      <div className="flex justify-end"><button className="btn-primary" disabled={busy || !name.trim() || (current && !current.ready)}>{submitLabel}</button></div>
+      <div className="flex justify-end"><button type="submit" className="btn-primary" disabled={busy || !name.trim() || (current && !current.ready)}>{submitLabel}</button></div>
     </form>
   );
 }

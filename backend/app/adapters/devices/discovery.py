@@ -45,7 +45,9 @@ async def _open(host: str, port: int, timeout: float = 1.5) -> bool | str:
 
 async def _web(host: str, port: int) -> tuple[str, dict]:
     scheme = "http" if port == 80 else "https"
-    async with httpx.AsyncClient(verify=False, timeout=4, follow_redirects=True) as http:
+    # Only the banner of a device is read, with no credentials: devices answer with self-signed certificates, and
+    # discovery has to see them before anyone could trust their certificates.
+    async with httpx.AsyncClient(verify=False, timeout=4, follow_redirects=True) as http:  # NOSONAR
         base = f"{scheme}://{host}:{port}"
         extra: dict = {}
         try:

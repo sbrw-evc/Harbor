@@ -39,7 +39,7 @@ function NewUser({ open, onClose }: { open: boolean; onClose: () => void }) {
         </Field>
         <div className="flex justify-end gap-2">
           <button type="button" className="btn-ghost" onClick={onClose}>{t("Cancel")}</button>
-          <button className="btn-primary" disabled={!form.username || !form.password || create.isPending}>{t("Create")}</button>
+          <button type="submit" className="btn-primary" disabled={!form.username || !form.password || create.isPending}>{t("Create")}</button>
         </div>
       </form>
     </Modal>
@@ -58,7 +58,7 @@ function ResetPassword({ user, onClose }: { user: PanelUser | null; onClose: () 
         <Field label={t("Temporary password")}><PasswordInput autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} /></Field>
         <div className="flex justify-end gap-2">
           <button type="button" className="btn-ghost" onClick={onClose}>{t("Cancel")}</button>
-          <button className="btn-primary" disabled={!password || reset.isPending}>{t("Reset")}</button>
+          <button type="submit" className="btn-primary" disabled={!password || reset.isPending}>{t("Reset")}</button>
         </div>
       </form>
     </Modal>

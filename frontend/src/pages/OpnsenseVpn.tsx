@@ -1,27 +1,18 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
-import { BrickWall, KeyRound, Save, Settings as SettingsIcon, Trash2, Users } from "lucide-react";
-import { Fragment, useEffect, useState, type ReactNode } from "react";
-import clsx from "clsx";
+import { BrickWall, KeyRound, Settings as SettingsIcon, Trash2, Users } from "lucide-react";
+import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
-import { copyText, useAction } from "@/lib/hooks";
+import { useAction } from "@/lib/hooks";
 import { t, tServer } from "@/i18n";
 import { useAuth } from "@/store/auth";
 import { Badge, Card, Field, Page, PageHeader } from "@/components/ui/Primitives";
 import { ErrorState, Skeleton } from "@/components/ui/Feedback";
 import PasswordInput from "@/components/ui/PasswordInput";
 import { confirm } from "@/components/ui/Confirm";
+import { ClientConfigCard, PublicKey, Row, rich } from "@/components/vpn/WireguardServer";
 
-/** A translated text with React nodes in place of its {placeholders}. */
-const rich = (s: string, parts: Record<string, ReactNode>) =>
-  s.split(/(\{\w+\})/).map((p, i) => {
-    const m = /^\{(\w+)\}$/.exec(p);
-    return <Fragment key={i}>{m && m[1] in parts ? parts[m[1]] : p}</Fragment>;
-  });
-
-function Row({ label, children }: { label: string; children: ReactNode }) {
-  return <div className="flex justify-between gap-3"><span className="text-slate-500">{label}</span><span className="text-right">{children}</span></div>;
-}
+const DEFAULT_NETWORK = "10.10.0.0/24"; // NOSONAR: the default client network, shown until OPNsense reports its own
 
 export default function OpnsenseVpn() {
   const isAdmin = useAuth((s) => s.can("admin"));
@@ -88,39 +79,17 @@ export default function OpnsenseVpn() {
               <Row label={t("Server address")}><span className="mono">{i.server_ip || "—"}</span></Row>
               <Row label={t("Peers")}>{i.peers_total} <span className="text-slate-500">{t("({n} blocked)", { n: i.peers_disabled })}</span></Row>
               <Row label={t("Online")}>{i.peers_online}</Row>
-              {i.public_key && <>
-                <div className="pt-2 text-slate-500">{t("Public key")}</div>
-                <button className="mono break-all text-left text-[11px] text-slate-300 hover:text-fg" title={t("Copy to the clipboard")} onClick={() => copyText(i.public_key!)}>{i.public_key}</button>
-              </>}
+              <PublicKey value={i.public_key} />
             </div>
           ) : <Skeleton className="h-56" />}
         </Card>
 
-        <Card className="xl:col-span-2" title={t("Client config settings")}>
-          {i ? (
-            <form className="space-y-4" onSubmit={(e) => { e.preventDefault(); save.mutate(undefined); }}>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <Field label={t("Connection address")} hint={t("empty — the public IP of the router in front ({ip}); set it if the port is forwarded elsewhere", { ip: i.public_address || t("not detected") })}>
-                  <input className="input mono" value={host} disabled={!isAdmin} onChange={(e) => setHost(e.target.value)} placeholder={i.public_address ?? ""} />
-                </Field>
-                <Field label="DNS" hint={t("empty — the address of OPNsense in the tunnel ({ip})", { ip: i.server_ip || "—" })}>
-                  <input className="input mono" value={dns} disabled={!isAdmin} onChange={(e) => setDns(e.target.value)} placeholder={i.server_ip ?? ""} />
-                </Field>
-              </div>
-              <Field label="AllowedIPs" hint={t("what the client sends into the tunnel; changes apply to configs downloaded again")}>
-                <div className="space-y-2">
-                  <input className="input mono" value={allowed} disabled={!isAdmin} onChange={(e) => setAllowed(e.target.value)} />
-                  <div className="flex flex-wrap gap-2">
-                    {presets.map((p) => (
-                      <button type="button" key={p.value} disabled={!isAdmin} className={clsx("chip", allowed === p.value && "chip-on")} onClick={() => setAllowed(p.value)}>{p.label}</button>
-                    ))}
-                  </div>
-                </div>
-              </Field>
-              {isAdmin && <div className="flex justify-end"><button className="btn-primary" disabled={save.isPending}><Save size={14} /> {t("Save")}</button></div>}
-            </form>
-          ) : <Skeleton className="h-56" />}
-        </Card>
+        <ClientConfigCard ready={!!i} isAdmin={isAdmin} saving={save.isPending} onSave={() => save.mutate(undefined)}
+          host={{ value: host, onChange: setHost, placeholder: i?.public_address ?? "",
+            hint: t("empty — the public IP of the router in front ({ip}); set it if the port is forwarded elsewhere", { ip: i?.public_address || t("not detected") }) }}
+          dns={{ value: dns, onChange: setDns, placeholder: i?.server_ip ?? "",
+            hint: t("empty — the address of OPNsense in the tunnel ({ip})", { ip: i?.server_ip || "—" }) }}
+          allowed={allowed} onAllowed={setAllowed} presets={presets} />
       </div>
 
       {isAdmin && (
@@ -135,7 +104,7 @@ export default function OpnsenseVpn() {
             </div>
             <div className="flex flex-wrap items-center justify-end gap-2">
               {i?.credentials && <button type="button" className="btn-ghost" disabled={removeKey.isPending} onClick={askRemove}><Trash2 size={14} /> {t("Remove")}</button>}
-              <button className="btn-primary" disabled={saveKey.isPending || !key.trim() || !secret.trim() || !i?.host}><KeyRound size={14} /> {t("Check and save")}</button>
+              <button type="submit" className="btn-primary" disabled={saveKey.isPending || !key.trim() || !secret.trim() || !i?.host}><KeyRound size={14} /> {t("Check and save")}</button>
             </div>
             {!i?.host && <p className="text-xs text-amber-300">{t("Set the address of OPNsense in the settings first.")}</p>}
           </form>
@@ -147,7 +116,7 @@ export default function OpnsenseVpn() {
           <li>{rich(t("The panel manages the peers of the WireGuard instance {instance} through the OPNsense API; the instance itself, its port, NAT and firewall rules are set up in OPNsense."), {
             instance: <span className="mono">{i?.instance ?? "wg0"}</span> })}</li>
           <li>{rich(t("A new client gets a free address from {network} and a preshared key; changes are applied with a WireGuard reconfigure on OPNsense."), {
-            network: <span className="mono">{i?.network ?? "10.10.0.0/24"}</span> })}</li>
+            network: <span className="mono">{i?.network ?? DEFAULT_NETWORK}</span> })}</li>
           <li>{t("Creating, blocking, quotas, access periods, traffic, the map and config links work the same as for Amnezia clients — on the “VPN clients” page choose the OPNsense server.")}</li>
           <li>{t("The config is plain WireGuard: it imports into the WireGuard and Amnezia VPN apps (QR or a .conf file).")}</li>
         </ul>

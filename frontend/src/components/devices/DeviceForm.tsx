@@ -10,6 +10,8 @@ import { Badge, Field, Modal, Segmented } from "@/components/ui/Primitives";
 import { Checkbox, NumberInput, Select } from "@/components/ui/Controls";
 import PasswordInput from "@/components/ui/PasswordInput";
 
+const EXAMPLE_HOST = "192.168.0.1"; // NOSONAR: an example in a placeholder
+
 export interface DevicePrefill { host?: string; platform?: string; name?: string }
 
 type Form = {
@@ -88,7 +90,7 @@ export default function DeviceForm({ open, onClose, device, prefill }: { open: b
             options={(p?.transports ?? []).map((tr) => ({ value: tr.name, label: TRANSPORT_LABEL[tr.name] ? t(TRANSPORT_LABEL[tr.name]) : tr.name }))} />
         </Field>
         <Field label={t("Address (IP or host name)")}>
-          <input className="input mono" value={f.host} onChange={(e) => set({ host: e.target.value })} placeholder="192.168.0.1" />
+          <input className="input mono" value={f.host} onChange={(e) => set({ host: e.target.value })} placeholder={EXAMPLE_HOST} />
         </Field>
         <div className="grid grid-cols-2 gap-2">
           <Field label={t("Port")}>

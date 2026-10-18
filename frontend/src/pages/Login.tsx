@@ -4,6 +4,7 @@ import { Activity, AlertTriangle, ExternalLink, KeyRound, Loader2, LogIn, PlugZa
 import { useEffect, useState, type FormEvent } from "react";
 import { Navigate, useLocation, useNavigate } from "react-router-dom";
 import { api } from "@/lib/api";
+import { useFocus } from "@/lib/hooks";
 import type { PanelUser } from "@/lib/types";
 import { clearSignedOut, useAuth, wasSignedOut } from "@/store/auth";
 import { Field } from "@/components/ui/Primitives";
@@ -58,6 +59,8 @@ function LocalSignIn({ from }: { from: string }) {
   const [form, setForm] = useState({ username: "", password: "" });
   const [code, setCode] = useState("");
   const [needsCode, setNeedsCode] = useState(false);
+  const codeInput = useFocus<HTMLInputElement>(needsCode);
+  const userInput = useFocus<HTMLInputElement>(!needsCode);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -88,13 +91,13 @@ function LocalSignIn({ from }: { from: string }) {
     <form className="space-y-4" onSubmit={submit}>
       {needsCode ? (
         <Field label={t("Code from the authenticator app")}>
-          <input className="input text-center font-mono text-xl tracking-[.4em]" autoFocus maxLength={6} inputMode="numeric"
+          <input ref={codeInput} className="input text-center font-mono text-xl tracking-[.4em]" maxLength={6} inputMode="numeric"
             autoComplete="one-time-code" value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))} />
         </Field>
       ) : (
         <>
           <Field label={t("User name")}>
-            <input className="input" autoFocus autoComplete="username" value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} />
+            <input ref={userInput} className="input" autoComplete="username" value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} />
           </Field>
           <Field label={t("Password")}>
             <PasswordInput autoComplete="current-password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
@@ -106,7 +109,7 @@ function LocalSignIn({ from }: { from: string }) {
           <AlertTriangle size={16} className="mt-0.5 shrink-0" /> {error}
         </div>
       )}
-      <button className="btn-primary w-full py-2.5" disabled={busy || (needsCode ? code.length < 6 : !form.username || !form.password)}>
+      <button type="submit" className="btn-primary w-full py-2.5" disabled={busy || (needsCode ? code.length < 6 : !form.username || !form.password)}>
         {busy ? <Loader2 size={16} className="animate-spin" /> : <LogIn size={16} />} {needsCode ? t("Confirm") : t("Sign in")}
       </button>
       {needsCode && <button type="button" className="btn-ghost w-full" onClick={() => { setNeedsCode(false); setCode(""); }}>{t("Back")}</button>}

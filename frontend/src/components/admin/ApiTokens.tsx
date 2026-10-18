@@ -57,7 +57,7 @@ export default function ApiTokens() {
               onChange={(v) => setForm({ ...form, days: v === null ? "" : String(v) })} />
           </Field>
           <p className="text-xs text-slate-500">{t("The token belongs to you: it never has more rights than your role and stops working when SPA disables your account.")}</p>
-          <div className="flex justify-end"><button className="btn-primary" disabled={create.isPending}>{t("Issue")}</button></div>
+          <div className="flex justify-end"><button type="submit" className="btn-primary" disabled={create.isPending}>{t("Issue")}</button></div>
         </form>
       </Modal>
       <Modal open={!!issued} onClose={() => setIssued(null)} title={t("Token issued")}>

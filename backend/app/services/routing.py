@@ -22,9 +22,10 @@ from .common import Actor, current, utcnow
 DOH_RESOLVERS = ("https://cloudflare-dns.com/dns-query", "https://dns.google/resolve")
 CUSTOM_KEY = "_custom_prefixes"
 SITE_LIST_KEY = "_site_list"
+# The special-purpose ranges of RFC 6890 never go through the tunnel: they are the definition, not addresses to reach.
 EXCLUDE = [ipaddress.ip_network(x) for x in (
-    "0.0.0.0/8", "10.0.0.0/8", "100.64.0.0/10", "127.0.0.0/8", "169.254.0.0/16",
-    "172.16.0.0/12", "192.168.0.0/16", "224.0.0.0/3")]
+    "0.0.0.0/8", "10.0.0.0/8", "100.64.0.0/10", "127.0.0.0/8", "169.254.0.0/16",  # NOSONAR
+    "172.16.0.0/12", "192.168.0.0/16", "224.0.0.0/3")]  # NOSONAR
 
 
 class SiteListCompiler:
@@ -145,8 +146,9 @@ class RoutingService:
     @staticmethod
     def _host(target: str) -> str:
         target = target.strip().lower()
-        for prefix in ("https://", "http://"):
-            target = target.removeprefix(prefix)
+        scheme, sep, rest = target.partition("://")  # a pasted link: only its host is wanted
+        if sep and scheme in ("http", "https"):
+            target = rest
         return target.split("/")[0].split(":")[0].rstrip(".")
 
     async def _parse_target(self, target: str) -> tuple[str, str, list[str]]:

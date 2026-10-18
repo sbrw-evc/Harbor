@@ -12,16 +12,41 @@ const files = (dir) =>
     return /\.(ts|tsx)$/.test(name) ? [p] : [];
   });
 
-const ru = {};
-for (const f of files(join(SRC, "i18n", "ru"))) {
-  const code = readFileSync(f, "utf8").replace(/^\s*\/\/.*$/gm, "");
-  const body = code.slice(code.indexOf("{"), code.lastIndexOf("}") + 1);
-  Object.assign(ru, new Function(`return (${body});`)());
+/** The JSON of an object literal: the same text without the commas before a closing bracket (strings kept as they are). */
+function withoutTrailingCommas(s) {
+  let out = "";
+  let inString = false;
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i];
+    if (inString) {
+      out += c;
+      if (c === "\\") out += s[++i];
+      else if (c === "\"") inString = false;
+      continue;
+    }
+    if (c === "\"") inString = true;
+    if (c === ",") {
+      let j = i + 1;
+      while (j < s.length && " \t\r\n".includes(s[j])) j++;
+      if (s[j] === "}" || s[j] === "]") continue;
+    }
+    out += c;
+  }
+  return out;
 }
+
+/** A dictionary is `export default { "English": "Russian", … }` with whole-line comments: read as data, not run. */
+function dictionary(file) {
+  const code = readFileSync(file, "utf8").split("\n").filter((line) => !line.trimStart().startsWith("//")).join("\n");
+  return JSON.parse(withoutTrailingCommas(code.slice(code.indexOf("{"), code.lastIndexOf("}") + 1)));
+}
+
+const ru = {};
+for (const f of files(join(SRC, "i18n", "ru"))) Object.assign(ru, dictionary(f));
 
 const str = String.raw`(?:"((?:[^"\\]|\\.)*)"|'((?:[^'\\]|\\.)*)'|\x60([^\x60$]*)\x60)`;
 const T = new RegExp(String.raw`\b[tk]\(\s*` + str, "g");
-const TN = new RegExp(String.raw`\btn\(\s*[^,]+,\s*` + str + String.raw`\s*,\s*` + str, "g");
+const TN = new RegExp(String.raw`\btn\([^,]+,\s*` + str + String.raw`\s*,\s*` + str, "g");
 const unescape = (s) => s.replace(/\\(.)/g, "$1");
 
 const missing = [];
@@ -31,7 +56,7 @@ for (const f of files(SRC)) {
   const code = readFileSync(f, "utf8");
   // Text is written in English and translated; only the name of the language itself is Russian.
   code.split("\n").forEach((line, i) => {
-    if (/[А-Яа-яЁё]/.test(line.replace(/"Русский"|'Русский'/g, "").replace(/\/\/.*$/, ""))) russian.push(`${relative(SRC, f)}:${i + 1}`);
+    if (/[А-Яа-яЁё]/.test(line.replace(/"Русский"|'Русский'/g, "").split("//")[0])) russian.push(`${relative(SRC, f)}:${i + 1}`);
   });
   for (const m of code.matchAll(T)) {
     const key = unescape(m[1] ?? m[2] ?? m[3]);
@@ -46,7 +71,7 @@ for (const f of files(SRC)) {
   }
 }
 
-const vars = (s) => [...new Set([...s.matchAll(/\{(\w+)\}/g)].map((m) => m[1]))].sort().join();
+const vars = (s) => [...new Set([...s.matchAll(/\{(\w+)\}/g)].map((m) => m[1]))].sort((a, b) => a.localeCompare(b)).join();
 const broken = Object.entries(ru).filter(([k, v]) => v.split("|").some((form) => vars(form) !== vars(k))).map(([k]) => k);
 const cyrillicKeys = Object.keys(ru).filter((k) => /[А-Яа-яЁё]/.test(k));
 

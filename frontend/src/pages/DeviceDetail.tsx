@@ -189,7 +189,7 @@ export default function DeviceDetail() {
   const [tab, setTab] = useState<Tab>("interfaces");
   const [editing, setEditing] = useState(false);
   const q = useQuery({ queryKey: ["device", id], queryFn: () => api.devices.get(id), refetchInterval: 30_000 });
-  useLive("devices", (e: { id: string }) => { if (e.id === id) q.refetch(); }, [id]);
+  useLive("devices", (e: { id: string }) => { if (e.id === id) void q.refetch(); }, [id]);
   const poll = useAction(() => api.devices.poll(id), { invalidate: [["device", id]],
     onSuccess: (r) => (r.ok ? notify.success(t("Poll complete")) : notify.error(t("The device did not respond"), r.error ? tServer(r.error) : undefined)) });
   const remove = useAction(() => api.devices.remove(id), { success: t("Device deleted"), invalidate: [["devices"]], onSuccess: () => nav("/devices") });

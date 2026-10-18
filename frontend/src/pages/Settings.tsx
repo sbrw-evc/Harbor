@@ -16,85 +16,89 @@ import SpaConnection from "@/components/admin/SpaConnection";
 import { k, t, tServer } from "@/i18n";
 
 type Def = { key: string; label: string; hint?: string; type: "text" | "number" | "bool" | "select"; options?: [string, string][] };
+const field = (type: Def["type"]) => (key: string, label: string, hint?: string): Def => ({ key, label, hint, type });
+const text = field("text");
+const num = field("number");
+const bool = field("bool");
+const select = (key: string, label: string, options: [string, string][]): Def => ({ key, label, type: "select", options });
 // The infrastructure the panel manages (it was .env before the setup wizard). A change applies within seconds.
 const INFRA_GROUPS: { title: string; anchor?: string; fields: Def[] }[] = [
   { title: k("Router (MikroTik)"), anchor: "infrastructure", fields: [
-    { key: "router_host", label: k("Address"), hint: k("reached over SSH with the key of the panel"), type: "text" },
-    { key: "router_ssh_user", label: k("SSH user"), type: "text" },
+    text("router_host", k("Address"), k("reached over SSH with the key of the panel")),
+    text("router_ssh_user", k("SSH user")),
   ] },
   { title: k("Amnezia server (VPS)"), fields: [
-    { key: "awg_host", label: k("Address"), hint: k("empty — no Amnezia server"), type: "text" },
-    { key: "awg_ssh_user", label: k("SSH user"), type: "text" },
-    { key: "awg_container", label: k("AmneziaWG container"), type: "text" },
-    { key: "awg_iface", label: k("Interface"), type: "text" },
-    { key: "awg_bin", label: k("Utility"), type: "text" },
-    { key: "awg_dir", label: k("Config folder in the container"), type: "text" },
+    text("awg_host", k("Address"), k("empty — no Amnezia server")),
+    text("awg_ssh_user", k("SSH user")),
+    text("awg_container", k("AmneziaWG container")),
+    text("awg_iface", k("Interface")),
+    text("awg_bin", k("Utility")),
+    text("awg_dir", k("Config folder in the container")),
   ] },
   { title: k("Gateway and LAN"), fields: [
-    { key: "gateway_ip", label: k("Address of the gateway (this host)"), type: "text" },
-    { key: "lan_cidr", label: k("Home network"), type: "text" },
-    { key: "lan_if", label: k("LAN interface of the gateway"), type: "text" },
-    { key: "tunnel_net", label: k("Network of the tunnel"), type: "text" },
-    { key: "port_forwards", label: k("Port forwards to the tunnel"), hint: k("e.g. 8443=192.168.0.10:443, space-separated"), type: "text" },
+    text("gateway_ip", k("Address of the gateway (this host)")),
+    text("lan_cidr", k("Home network")),
+    text("lan_if", k("LAN interface of the gateway")),
+    text("tunnel_net", k("Network of the tunnel")),
+    text("port_forwards", k("Port forwards to the tunnel"), k("e.g. 8443=192.168.0.10:443, space-separated")),
   ] },
   { title: k("WireGuard on MikroTik"), fields: [
-    { key: "mt_wg_iface", label: k("Interface"), type: "text" },
-    { key: "mt_wg_network", label: k("Client network"), type: "text" },
-    { key: "mt_wg_port", label: k("Port"), type: "number" },
+    text("mt_wg_iface", k("Interface")),
+    text("mt_wg_network", k("Client network")),
+    num("mt_wg_port", k("Port")),
   ] },
   { title: k("WireGuard on OPNsense"), fields: [
-    { key: "opn_host", label: k("Address"), hint: k("reached over the REST API; empty — no OPNsense server; the API key is entered on the “VPN on OPNsense” page"), type: "text" },
-    { key: "opn_wg_instance", label: k("Instance"), hint: k("the name of the instance or its device, e.g. wg0"), type: "text" },
-    { key: "opn_verify_tls", label: k("Check the TLS certificate"), hint: k("off for the self-signed certificate of OPNsense"), type: "bool" },
+    text("opn_host", k("Address"), k("reached over the REST API; empty — no OPNsense server; the API key is entered on the “VPN on OPNsense” page")),
+    text("opn_wg_instance", k("Instance"), k("the name of the instance or its device, e.g. wg0")),
+    bool("opn_verify_tls", k("Check the TLS certificate"), k("off for the self-signed certificate of OPNsense")),
   ] },
   { title: k("Panel"), fields: [
-    { key: "public_base_url", label: k("Address of the panel"), hint: k("for config links and Keystone, e.g. https://nc.example.com"), type: "text" },
-    { key: "spa_public_url", label: k("Address for Keystone redirects"), hint: k("empty — the address of the panel"), type: "text" },
-    { key: "session_ttl_hours", label: k("Session lifetime, h"), type: "number" },
-    { key: "cookie_secure", label: k("Cookies only over HTTPS"), type: "bool" },
-    { key: "flows_ttl_days", label: k("Keep flows in ClickHouse, days"), type: "number" },
+    text("public_base_url", k("Address of the panel"), k("for config links and Keystone, e.g. https://nc.example.com")),
+    text("spa_public_url", k("Address for Keystone redirects"), k("empty — the address of the panel")),
+    num("session_ttl_hours", k("Session lifetime, h")),
+    bool("cookie_secure", k("Cookies only over HTTPS")),
+    num("flows_ttl_days", k("Keep flows in ClickHouse, days")),
   ] },
 ];
 
 const GROUPS: { title: string; anchor?: string; fields: Def[] }[] = [
   { title: k("Client configs"), fields: [
-    { key: "client_dns", label: k("DNS for clients"), hint: k("comma-separated"), type: "text" },
-    { key: "endpoint_host", label: k("Server address in configs"), hint: k("empty — the address of the Amnezia server"), type: "text" },
-    { key: "share_link_hours", label: k("Config link lifetime, h"), type: "number" },
+    text("client_dns", k("DNS for clients"), k("comma-separated")),
+    text("endpoint_host", k("Server address in configs"), k("empty — the address of the Amnezia server")),
+    num("share_link_hours", k("Config link lifetime, h")),
   ] },
   { title: k("Default policies"), fields: [
-    { key: "default_quota_gb", label: k("Default quota, GB/month"), hint: k("empty — unlimited"), type: "number" },
-    { key: "default_valid_days", label: k("Default access period, days"), hint: k("empty — no limit"), type: "number" },
-    { key: "quota_warn_percent", label: k("Warn when the quota is used, %"), type: "number" },
-    { key: "expiry_warn_days", label: k("Warn before access ends, days"), type: "number" },
+    num("default_quota_gb", k("Default quota, GB/month"), k("empty — unlimited")),
+    num("default_valid_days", k("Default access period, days"), k("empty — no limit")),
+    num("quota_warn_percent", k("Warn when the quota is used, %")),
+    num("expiry_warn_days", k("Warn before access ends, days")),
   ] },
   { title: k("Monitoring"), fields: [
-    { key: "poll_seconds", label: k("Server polling interval, s"), type: "number" },
-    { key: "retention_days", label: k("Keep statistics, days"), type: "number" },
-    { key: "gateway_stale_minutes", label: k("Alert when the gateway is silent longer than, min"), type: "number" },
-    { key: "timezone", label: k("Time zone of reports"), type: "text" },
+    num("poll_seconds", k("Server polling interval, s")),
+    num("retention_days", k("Keep statistics, days")),
+    num("gateway_stale_minutes", k("Alert when the gateway is silent longer than, min")),
+    text("timezone", k("Time zone of reports")),
   ] },
   { title: k("Notifications"), anchor: "notifications", fields: [
-    { key: "notify_enabled", label: k("Send notifications"), type: "bool" },
-    { key: "notify_min_severity", label: k("Minimum severity"), type: "select",
-      options: [["info", k("Info")], ["warning", k("Warning")], ["critical", k("Critical")]] },
-    { key: "notify_telegram_chat_id", label: k("Telegram chat id"), hint: k("ID of a user, group or channel"), type: "text" },
+    bool("notify_enabled", k("Send notifications")),
+    select("notify_min_severity", k("Minimum severity"), [["info", k("Info")], ["warning", k("Warning")], ["critical", k("Critical")]]),
+    text("notify_telegram_chat_id", k("Telegram chat id"), k("ID of a user, group or channel")),
   ] },
   { title: k("Network and devices"), fields: [
-    { key: "endpoint_offline_minutes", label: k("A client is offline after, min"), type: "number" },
-    { key: "endpoint_retention_days", label: k("Forget inactive clients after, days"), type: "number" },
-    { key: "flow_collector_host", label: k("Collector address for flow export"), hint: k("empty — the address of the gateway"), type: "text" },
-    { key: "flow_collector_port", label: k("NetFlow / IPFIX port"), type: "number" },
+    num("endpoint_offline_minutes", k("A client is offline after, min")),
+    num("endpoint_retention_days", k("Forget inactive clients after, days")),
+    text("flow_collector_host", k("Collector address for flow export"), k("empty — the address of the gateway")),
+    num("flow_collector_port", k("NetFlow / IPFIX port")),
   ] },
   { title: k("Traffic analysis"), fields: [
-    { key: "threat_enabled", label: k("Check addresses against threat lists"), type: "bool" },
-    { key: "threat_refresh_hours", label: k("Refresh threat lists every, h"), type: "number" },
-    { key: "threat_exclude", label: k("Do not flag networks"), hint: k("your public addresses, space-separated"), type: "text" },
-    { key: "rdns_enabled", label: k("Resolve names of remote hosts (PTR)"), type: "bool" },
+    bool("threat_enabled", k("Check addresses against threat lists")),
+    num("threat_refresh_hours", k("Refresh threat lists every, h")),
+    text("threat_exclude", k("Do not flag networks"), k("your public addresses, space-separated")),
+    bool("rdns_enabled", k("Resolve names of remote hosts (PTR)")),
   ] },
   { title: k("Backup"), fields: [
-    { key: "backup_enabled", label: k("Daily backup"), type: "bool" },
-    { key: "backup_keep", label: k("Backups to keep"), type: "number" },
+    bool("backup_enabled", k("Daily backup")),
+    num("backup_keep", k("Backups to keep")),
   ] },
 ];
 

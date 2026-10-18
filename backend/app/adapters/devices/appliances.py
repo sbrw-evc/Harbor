@@ -311,7 +311,9 @@ class KeeneticDriver(HttpApiDriver):
         realm, challenge = r.headers.get("X-NDM-Realm", ""), r.headers.get("X-NDM-Challenge", "")
         if not challenge:
             raise ExternalServiceError(f"{self.target.host}: this is not a Keenetic web interface")
-        md5 = hashlib.md5(f"{self.creds.username}:{realm}:{self.creds.password}".encode()).hexdigest()
+        # The challenge-response of the Keenetic web interface is defined with MD5; the router decides, not the panel.
+        md5 = hashlib.md5(f"{self.creds.username}:{realm}:{self.creds.password}".encode(),
+                          usedforsecurity=False).hexdigest()
         sha = hashlib.sha256((challenge + md5).encode()).hexdigest()
         r = await self.http.post("/auth", json={"login": self.creds.username, "password": sha})
         if r.status_code != 200:

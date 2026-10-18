@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import clsx from "clsx";
 import { api } from "@/lib/api";
+import { useFocus } from "@/lib/hooks";
 import { StatusDot } from "@/components/ui/Primitives";
 import { ALL_PAGES } from "./nav";
 import { t, useLang } from "@/i18n";
@@ -12,6 +13,7 @@ import { t, useLang } from "@/i18n";
 
 export default function CommandPalette({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [q, setQ] = useState("");
+  const search = useFocus<HTMLInputElement>(open);
   const [idx, setIdx] = useState(0);
   const nav = useNavigate();
   const lang = useLang();
@@ -34,12 +36,12 @@ export default function CommandPalette({ open, onClose }: { open: boolean; onClo
     <AnimatePresence>
       {open && (
         <motion.div className="fixed inset-0 z-50 flex items-start justify-center p-4 pt-[12vh]" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+          <button type="button" tabIndex={-1} aria-label={t("Close")} className="absolute inset-0 cursor-default bg-black/50 backdrop-blur-sm" onClick={onClose} />
           <motion.div initial={{ y: -12, scale: 0.97 }} animate={{ y: 0, scale: 1 }} exit={{ y: -8, opacity: 0 }}
             className="card relative w-full max-w-xl overflow-hidden shadow-2xl">
             <div className="flex items-center gap-3 border-b border-base-700 px-4">
               <Search size={18} className="text-slate-500" />
-              <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder={`${t("Search pages and clients")}…`}
+              <input ref={search} value={q} onChange={(e) => setQ(e.target.value)} placeholder={`${t("Search pages and clients")}…`}
                 className="h-12 flex-1 bg-transparent text-sm text-fg outline-none placeholder:text-slate-500"
                 onKeyDown={(e) => {
                   if (e.key === "ArrowDown") { e.preventDefault(); setIdx((i) => Math.min(i + 1, items.length - 1)); }

@@ -126,7 +126,7 @@ export function Select<T extends string | number>({ value, options, onChange, pl
               {options.map((o, i) => {
                 const isSel = o.value === value;
                 return (
-                  <div key={String(o.value)} role="option" aria-selected={isSel} aria-disabled={o.disabled} data-index={i}
+                  <div key={String(o.value)} role="option" tabIndex={-1} aria-selected={isSel} aria-disabled={o.disabled} data-index={i}
                     onMouseEnter={() => !o.disabled && setActive(i)} onMouseDown={(e) => e.preventDefault()} onClick={() => choose(o)}
                     className={clsx("flex cursor-pointer items-center gap-2 rounded-md px-2.5 py-2 text-sm",
                       o.disabled ? "cursor-not-allowed opacity-40" : i === active ? "bg-accent/20 text-fg" : "text-slate-200",
@@ -180,11 +180,11 @@ export function Checkbox({ checked, onChange, label, disabled, indeterminate, cl
   );
   if (!label) return <span className={className}>{box}</span>;
   return (
-    <span className={clsx("inline-flex cursor-pointer select-none items-start gap-2.5 text-sm text-slate-200", disabled && "cursor-not-allowed opacity-60", className)}
-      onClick={(e) => { if (!disabled && (e.target as HTMLElement).closest("button") === null) onChange(!checked); }}>
+    // A label: a click on its text is passed to the checkbox button by the browser, keyboard and screen readers included.
+    <label className={clsx("inline-flex cursor-pointer select-none items-start gap-2.5 text-sm text-slate-200", disabled && "cursor-not-allowed opacity-60", className)}>
       <span className="mt-[1px]">{box}</span>
       <span>{label}</span>
-    </span>
+    </label>
   );
 }
 

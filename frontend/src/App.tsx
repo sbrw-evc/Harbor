@@ -87,7 +87,7 @@ function SetupGate({ children }: { children: JSX.Element }) {
 
 export default function App() {
   const bootstrap = useAuth((s) => s.bootstrap);
-  useEffect(() => { bootstrap(); }, [bootstrap]);
+  useEffect(() => { void bootstrap(); }, [bootstrap]);
   return (
     <BrowserRouter>
       <SetupGate>

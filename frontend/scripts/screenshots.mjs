@@ -5,10 +5,9 @@
 //   NC_URL=http://127.0.0.1:4173 node frontend/scripts/screenshots.mjs
 //
 // Uses Playwright with an installed Chromium (PLAYWRIGHT_BROWSERS_PATH); PNGs go to docs/screens/.
-import { execSync } from "node:child_process";
 import { mkdirSync } from "node:fs";
 import { createRequire } from "node:module";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const require = createRequire(import.meta.url);
@@ -16,7 +15,10 @@ function playwright() {
   try {
     return require("playwright");
   } catch {
-    return require(join(execSync("npm root -g").toString().trim(), "playwright"));
+    // A global install: <prefix>/lib/node_modules next to this node binary (NODE_GLOBAL_ROOT elsewhere), found without
+    // running a program looked up in PATH.
+    const root = process.env.NODE_GLOBAL_ROOT ?? join(dirname(dirname(process.execPath)), "lib", "node_modules");
+    return require(join(root, "playwright"));
   }
 }
 
