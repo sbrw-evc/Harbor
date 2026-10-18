@@ -2,7 +2,8 @@ import asyncio
 import os
 import socket
 
-LISTEN = os.environ.get("LISTEN", "10.8.1.0")  # NOSONAR: the tunnel address of the VPS, only reachable through it
+# The tunnel address of the VPS, only reachable through the tunnel.
+LISTEN = os.environ.get("LISTEN", "10.8.1.0")  # NOSONAR
 PORT = int(os.environ.get("PORT", "3128"))
 CC = os.environ.get("CC", "bbr").encode()
 ALLOWED_PORTS = {int(p) for p in os.environ.get("ALLOWED_PORTS", "443").split(",")}

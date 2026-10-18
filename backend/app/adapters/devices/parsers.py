@@ -21,10 +21,11 @@ def parse_uptime(text: str) -> int | None:
         return None
     total = 0
     found = False
-    for n, unit in re.findall(r"(\d++)\s*+(year|week|day|hour|minute|second)s?", text, re.I):
+    # Bounded repetitions: a long run of digits cannot make the search backtrack.
+    for n, unit in re.findall(r"(\d{1,9})\s{0,3}(year|week|day|hour|minute|second)s?", text, re.I):
         total += int(n) * DURATION_UNITS[unit.lower()]
         found = True
-    clock = re.search(r"(\d++):(\d{2}):(\d{2})", text)
+    clock = re.search(r"(\d{1,9}):(\d{2}):(\d{2})", text)
     if clock:
         h, m, s = (int(x) for x in clock.groups())
         total += h * 3600 + m * 60 + s

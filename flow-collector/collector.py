@@ -62,7 +62,8 @@ def address(value):
 def column(a) -> str:
     """The text of an IPv6 column: IPv4 as ::ffff:a.b.c.d, which every ClickHouse version parses."""
     if a is None:
-        return "::ffff:0.0.0.0"  # NOSONAR: the unspecified address, the empty value of the column
+        # The unspecified address: the empty value of the column.
+        return "::ffff:0.0.0.0"  # NOSONAR
     return f"::ffff:{a}" if a.version == 4 else str(a)
 
 
