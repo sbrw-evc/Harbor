@@ -12,6 +12,7 @@ import httpx
 import pytest
 from chfake import ChdbClient
 from test_devices_service import SNAPS, FakeDriver
+from test_flows_sql import flow
 
 from app import container as container_module
 from app.adapters.amnezia import AwgConfigCodec
@@ -193,6 +194,7 @@ _ID = re.compile(r"^([0-9a-f]{8}-[0-9a-f-]{27}|\d+|([0-9a-f]{2}:){5}[0-9a-f]{2})
 _NAMED = ("backups", "share", "guides")
 _KEY = re.compile(r"[A-Za-z0-9+/]{42,43}=")
 _TOKEN = re.compile(r'"(token|secret)": "[^"]{16,}"')
+RECORDED_POSTS = ("/api/flows/visualize", "/api/flows/recent")  # queries, not writes: the pages need their answers
 _VPN_KEY = re.compile(r"vpn://[A-Za-z0-9_=-]+")  # the Amnezia key: a packed config with a private key
 
 
@@ -225,8 +227,8 @@ class Api:
         assert r.status_code == expect, f"{method} {path}: {r.status_code} {r.text[:400]}"
         ctype = r.headers.get("content-type", "")
         data = r.json() if ctype.startswith("application/json") else r.text
-        if method == "GET" and expect == 200:
-            key = fixture_path(path)
+        if expect == 200 and (method == "GET" or path in RECORDED_POSTS):
+            key = fixture_path(path) if method == "GET" else f"POST {path}#{(kw.get('json') or {}).get('graph', '')}"
             if len(json.dumps(data)) >= len(json.dumps(RECORD.get(key, ""))):
                 RECORD[key] = masked(data)
         return data
@@ -389,9 +391,18 @@ async def walk(api: Api, c, h: httpx.AsyncClient):
                  "/api/flows/exporters", "/api/flows/rules/kinds", "/api/flows/rules", "/api/flows/threats",
                  "/api/flows/views"):
         assert await api.get(path) is not None, path
-    await api.post("/api/flows/visualize", {"dimensions": ["Application"], "limit": 5})
-    await api.post("/api/flows/visualize", {"dimensions": ["LocalHost", "RemoteCountry"], "graph": "sankey", "limit": 5})
-    await api.post("/api/flows/recent", {"limit": 5})
+    now = int(time.time())
+    rows = [flow(now - i * 300, LocalAddr=f"192.168.0.{10 + i % 3}", RemoteAddr=["8.8.8.8", "1.1.1.1", "198.51.100.7"][i % 3],
+                 RemotePort=[443, 53, 22][i % 3], Proto=[6, 17, 6][i % 3], RemoteCountry=["US", "DE", "NL"][i % 3],
+                 Route=["direct", "vpn"][i % 2], Direction=["out", "in"][i % 2], Bytes=1_000_000 + i * 10_000)
+            for i in range(60)]
+    await c.clickhouse.insert("flows", rows)
+    for graph, dims in (("stacked", ["Application"]), ("stacked100", ["RemoteCountry"]), ("lines", ["Route"]),
+                        ("grid", ["LocalHost"]), ("sankey", ["LocalHost", "RemoteCountry"])):
+        await api.post("/api/flows/visualize", {"dimensions": dims, "graph": graph, "limit": 5,
+                                                 "bidirectional": graph == "lines", "previousPeriod": graph == "stacked"})
+    await api.post("/api/flows/recent", {"limit": 20})
+    assert (await api.get("/api/flows/overview")) and (await api.get("/api/flows/exporters")) is not None
     f = await api.post("/api/flows/filters", {"name": "dns", "filter": "RemotePort = 53 AND Proto = UDP"})
     await api.delete(f"/api/flows/filters/{f['id']}")
     v = await api.post("/api/flows/views", {"name": "top", "state": {"graph": "stacked"}})
