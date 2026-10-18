@@ -25,3 +25,16 @@ afterEach(() => {
   cleanup();
   sessionStorage.clear();
 });
+
+// Charts and maps draw on a canvas jsdom does not have: the pages still build their options.
+vi.mock("echarts-for-react", async () => {
+  const { createElement } = await import("react");
+  return { default: () => createElement("div", { "data-testid": "chart" }) };
+});
+vi.mock("react-leaflet", async () => {
+  const { createElement } = await import("react");
+  const Pass = ({ children }: { children?: unknown }) => createElement("div", null, children as never);
+  const LayersControl = Object.assign(Pass, { BaseLayer: Pass, Overlay: Pass });
+  return { MapContainer: Pass, TileLayer: () => null, CircleMarker: Pass, Popup: Pass, Tooltip: Pass, LayersControl,
+           useMap: () => ({ fitBounds: () => {}, setView: () => {} }) };
+});

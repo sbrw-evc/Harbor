@@ -48,7 +48,10 @@ export function installBackend() {
       backend.sent.push({ method, path: url.pathname, body });
       const over = backend.overrides.get(`${method} ${fixturePath(url.pathname)}`);
       if (over instanceof Error) return respond(400, { detail: over.message });
-      return respond(200, over ?? { ok: true });
+      // Queries sent with POST (the flow visualisation by its graph, the recent flows) have recorded answers too.
+      const graph = (body as { graph?: string } | null)?.graph ?? "";
+      const recorded = (fixtures as Record<string, unknown>)[`${method} ${fixturePath(url.pathname)}#${graph}`];
+      return respond(200, over ?? recorded ?? { ok: true });
     }
     const data = backend.answer(url.pathname);
     if (data instanceof Error) return respond(400, { detail: data.message });
