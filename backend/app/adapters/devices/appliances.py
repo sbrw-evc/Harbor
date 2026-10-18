@@ -453,13 +453,20 @@ def parse_linux(text: str) -> Snapshot:
     for m in re.finditer(r"^\d+:\s+(\S+)\s+inet\s+(\S+)", s.get("ADDR", ""), re.M):
         addrs.setdefault(m.group(1), []).append(m.group(2))
     interfaces = []
-    for m in re.finditer(r"^\d+:\s+([^:@\s]+)(?:@\S+)?:\s+<([^>]*)>.*?mtu (\d+).*?(?:link/\w+\s+([0-9a-f:]{17}))?", s.get("LINK", ""), re.M):
+    for line in s.get("LINK", "").splitlines():
+        # One line of `ip -o link`: "2: eth0: <FLAGS> mtu 1500 ... link/ether 52:54:00:12:34:56 brd ..."; the parts
+        # are found one by one (the MAC used to be lost: a lazy match before an optional group took nothing).
+        m = re.match(r"\d+:\s+([^:@\s]+)(?:@\S+)?:\s+<([^>]*)>", line)
+        mtu = re.search(r"\bmtu (\d+)", line)
+        if not m or not mtu:
+            continue
         name, flags = m.group(1), m.group(2).split(",")
         if name == "lo":
             continue
+        mac = re.search(r"link/\w+\s+([0-9a-f:]{17})", line)
         rx, tx = counters.get(name, (None, None))
-        interfaces.append(Interface(name=name, mac=norm_mac(m.group(4)), admin_up="UP" in flags,
-                                    oper_up="LOWER_UP" in flags, mtu=int(m.group(3)), addresses=addrs.get(name, []),
+        interfaces.append(Interface(name=name, mac=norm_mac(mac.group(1) if mac else ""), admin_up="UP" in flags,
+                                    oper_up="LOWER_UP" in flags, mtu=int(mtu.group(1)), addresses=addrs.get(name, []),
                                     speed_mbps=speeds.get(name) if speeds.get(name, 0) > 0 else None, rx_bytes=rx, tx_bytes=tx))
     if not interfaces:
         interfaces = [Interface(name=n, rx_bytes=rx, tx_bytes=tx, addresses=addrs.get(n, [])) for n, (rx, tx) in counters.items() if n != "lo"]

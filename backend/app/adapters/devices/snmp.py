@@ -51,7 +51,8 @@ def _str(v) -> str:
         raw = v.asOctets()
         try:
             text = raw.decode()
-            return text if text.isprintable() else raw.hex()
+            # Text with line breaks is text (a sysDescr of several lines); other control bytes mean binary data.
+            return text if all(c.isprintable() or c in "\t\r\n" for c in text) else raw.hex()
         except UnicodeDecodeError:
             return raw.hex()
     except AttributeError:
