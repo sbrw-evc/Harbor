@@ -27,7 +27,7 @@ describe("VPN clients", () => {
     const dialog = await screen.findByRole("dialog");
     await waitFor(() => expect(within(dialog).queryAllByText(/AmneziaWG|WireGuard/).length).toBeGreaterThan(0));
     for (const b of within(dialog).getAllByRole("button")) {
-      if (/link|копир|Copy|\.conf|Download/i.test(b.textContent ?? "")) fireEvent.click(b);
+      if (/link|Copy|\.conf|Download/i.test(b.textContent ?? "")) fireEvent.click(b);
     }
     await act(() => sleep(200));
     expect(rendering.errors).toEqual([]);
