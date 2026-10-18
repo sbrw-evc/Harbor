@@ -244,3 +244,32 @@ describe("the sign-in step", () => {
     expect(notify.success).toHaveBeenCalledWith("Keystone is connected", expect.any(String));
   });
 });
+
+describe("going back", () => {
+  it("returns from the storage to the setup code and from the sign-in to the keys, keeping what was typed", async () => {
+    await toStorage();
+    fireEvent.click(screen.getByRole("button", { name: /^Back$/ }));
+    const codeInput = await screen.findByRole("textbox");
+    expect((codeInput as HTMLInputElement).value).toBe("ABCD-EFGH-IJKL");
+    fireEvent.click(screen.getByRole("button", { name: /Continue/ }));
+    await waitFor(() => expect(input("Password", 0).value).toBe("pg-pass"));  // the storage form kept its passwords
+    fireEvent.click(screen.getByRole("button", { name: /Go to the step Setup code/ }));
+    expect(await screen.findByRole("textbox")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /Go to the step Storage/ }));  // forward, without the code again
+    expect(input("Password", 1).value).toBe("ch-pass");
+
+    await save(SECRETS);
+    await screen.findByDisplayValue("s.root");
+    expect(screen.queryByRole("button", { name: /^Back$/ })).toBeNull();  // the saved storage cannot be edited again
+    fireEvent.click(screen.getByRole("checkbox"));
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    await screen.findByText("How people sign in");
+    type(input("Name"), "Root");
+    fireEvent.click(screen.getByRole("button", { name: /^Back$/ }));
+    expect(screen.getByDisplayValue("recovery==")).toBeTruthy();
+    expect(screen.getByRole("checkbox").getAttribute("aria-checked")).toBe("true");
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    await waitFor(() => expect(input("Name").value).toBe("Root"));
+    expect(screen.queryByRole("button", { name: /Go to the step Storage/ })).toBeNull();
+  });
+});

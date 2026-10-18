@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { AlertTriangle, Check, CheckCircle2, Copy, Database, Download, KeyRound, Loader2, ShieldCheck, UserPlus } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Check, CheckCircle2, Copy, Database, Download, KeyRound, Loader2, ShieldCheck, UserPlus } from "lucide-react";
 import { AnimatePresence, MotionConfig, motion } from "framer-motion";
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { Navigate } from "react-router-dom";
@@ -60,26 +60,40 @@ function Shell({ children, wide }: { children: ReactNode; wide?: boolean }) {
   );
 }
 
-/** In the narrow card only the current step is named, the others are numbers. */
-function Steps({ current, compact }: { current: number; compact?: boolean }) {
+/** In the narrow card only the current step is named, the others are numbers. A step one may go to (back, or forward
+ * to the furthest one reached) is a button. */
+function Steps({ current, reached, compact, canPick, onPick }: {
+  current: number; reached: number; compact?: boolean; canPick: (i: number) => boolean; onPick: (i: number) => void;
+}) {
   const names = [t("Setup code"), t("Storage"), t("OpenBao keys"), t("Sign-in")];
   return (
     <motion.ol layout="position" className="mb-6 flex gap-2 text-xs">
-      {names.map((n, i) => (
-        <li key={n} title={n} className={clsx("relative flex items-center justify-center gap-1 whitespace-nowrap rounded-md border px-2 py-1.5 text-center transition-colors duration-300",
-          compact && i !== current ? "flex-none px-3" : "flex-1",
-          i < current ? "border-green-500/40 text-green-300" : i === current ? "border-accent text-slate-100" : "border-base-700 text-slate-500")}>
+      {names.map((n, i) => {
+        const done = i < reached && i !== current;
+        const inner = <>
           {i === current && <motion.span layoutId="setup-step" className="absolute inset-0 rounded-md bg-accent/10" transition={SPRING} />}
           <AnimatePresence initial={false}>
-            {i < current && (
+            {done && (
               <motion.span initial={{ scale: 0, width: 0 }} animate={{ scale: 1, width: "auto" }} exit={{ scale: 0, width: 0 }} transition={SPRING}>
                 <Check size={12} />
               </motion.span>
             )}
           </AnimatePresence>
           <span className="relative">{compact && i !== current ? i + 1 : `${i + 1}. ${n}`}</span>
-        </li>
-      ))}
+        </>;
+        const look = clsx("relative flex w-full items-center justify-center gap-1 whitespace-nowrap rounded-md border px-2 py-1.5 text-center transition-colors duration-300",
+          compact && i !== current && "px-3",
+          done ? "border-green-500/40 text-green-300" : i === current ? "border-accent text-slate-100"
+            : i === reached ? "border-accent/50 text-slate-300" : "border-base-700 text-slate-500");
+        return (
+          <li key={n} title={n} className={compact && i !== current ? "flex-none" : "flex-1"}>
+            {canPick(i)
+              ? <button type="button" className={clsx(look, "hover:border-accent/60 hover:text-slate-100")} onClick={() => onPick(i)}
+                  aria-label={t("Go to the step {step}", { step: n })}>{inner}</button>
+              : <div className={look} aria-current={i === current ? "step" : undefined}>{inner}</div>}
+          </li>
+        );
+      })}
     </motion.ol>
   );
 }
@@ -126,7 +140,8 @@ function CodeStep({ onDone }: { onDone: (code: string) => void }) {
     } catch (err) {
       notify.error(t("The setup code is not accepted"), (err as Error).message);
       setShake((s) => s + 1);
-      setBusy(false);
+    } finally {
+      setBusy(false);  // the step stays mounted: one may come back to it
     }
   };
   return (
@@ -423,6 +438,9 @@ export default function SetupPage() {
   // The answer of the storage step says the stage moved on; a reading of the stage right after it may still come from a
   // process that has not started on the new storage yet, and must not bring the storage step back.
   const [storageSaved, setStorageSaved] = useState(false);
+  const [keysSaved, setKeysSaved] = useState(false);
+  // A step the user went back to; null — the furthest step reached.
+  const [view, setView] = useState<number | null>(null);
   const stage = state.data?.stage;
 
   if (stage === "done") return <Navigate to="/" replace />;
@@ -431,19 +449,38 @@ export default function SetupPage() {
       <Shell><div className="flex items-center gap-2 py-6 text-sm text-slate-400"><Loader2 size={16} className="animate-spin" /> {t("Loading…")}</div></Shell>
     </MotionConfig>
   );
-  const step = !code ? 0 : stage === "storage" && !storageSaved ? 1 : secrets ? 2 : 3;
+  const reached = !code ? 0 : stage === "storage" && !storageSaved ? 1 : secrets && !keysSaved ? 2 : 3;
+  // Back is possible where nothing is lost: from the storage to the setup code, and from the sign-in to the keys of
+  // OpenBao shown in this browser. The saved storage itself cannot be edited again: the server has moved on.
+  const canVisit = (i: number) => i === reached || (i === 0 && reached === 1) || (i === 2 && reached === 3 && !!secrets);
+  const step = view !== null && canVisit(view) ? view : reached;
+  const back = step === 1 ? 0 : step === 3 && secrets ? 2 : null;
+  const go = (i: number) => setView(i === reached ? null : i);
+  const panes: [number, boolean, ReactNode][] = [
+    [0, true, <CodeStep onDone={(c) => { setCode(c); setView(null); void state.refetch(); }} />],
+    [1, !!code && !storageSaved, code && <StorageStep code={code} onDone={(s) => { setSecrets(s); setStorageSaved(true); setView(null); void state.refetch(); }} />],
+    [2, !!secrets, secrets && <SecretsStep secrets={secrets} onDone={() => { setKeysSaved(true); setView(null); }} />],
+    [3, reached === 3, code && <AccountStep code={code} />],
+  ];
   return (
     <MotionConfig reducedMotion="user">
       <Shell wide={step > 0}>
-        <Steps current={step} compact={step === 0} />
-        {/* Each step slides in when it comes. No exit animation: AnimatePresence mode="wait" around a step with its own
-            animated parts kept the previous step on the screen for good. */}
-        <motion.div key={step} initial={{ opacity: 0, x: 32 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.25, ease: "easeOut" }}>
-          {step === 0 && <CodeStep onDone={(c) => { setCode(c); void state.refetch(); }} />}
-          {step === 1 && <StorageStep code={code!} onDone={(s) => { setSecrets(s); setStorageSaved(true); void state.refetch(); }} />}
-          {step === 2 && <SecretsStep secrets={secrets!} onDone={() => setSecrets(null)} />}
-          {step === 3 && <AccountStep code={code!} />}
-        </motion.div>
+        <Steps current={step} reached={reached} compact={step === 0} canPick={(i) => i !== step && canVisit(i)} onPick={go} />
+        {back !== null && (
+          <motion.button type="button" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="btn-ghost btn-sm -mt-3 mb-3"
+            onClick={() => go(back)}>
+            <ArrowLeft size={14} /> {t("Back")}
+          </motion.button>
+        )}
+        {/* The steps stay mounted, so going back and forth keeps what was typed; the shown one slides in from the side
+            it comes from. No AnimatePresence mode="wait": with animated parts inside it kept the old step for good. */}
+        {panes.map(([i, mounted, node]) => mounted && (
+          <motion.div key={i} hidden={i !== step} initial={{ opacity: 0, x: 32 }}
+            animate={i === step ? { opacity: 1, x: 0 } : { opacity: 0, x: i < step ? -32 : 32 }}
+            transition={{ duration: 0.25, ease: "easeOut" }}>
+            {node}
+          </motion.div>
+        ))}
       </Shell>
     </MotionConfig>
   );

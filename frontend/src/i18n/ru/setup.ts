@@ -68,6 +68,7 @@ export default {
   "{what} is copied": "{what}: скопировано",
   "Copy both": "Скопировать оба",
   "Save to a file": "Сохранить в файл",
+  "Go to the step {step}": "Перейти к шагу «{step}»",
   "OpenBao of Harbor at {address}, initialised {date}": "OpenBao панели Harbor {address}, инициализирован {date}",
   "Keep this file in a safe place (a password manager) and delete it from the downloads.": "Сохраните этот файл в надёжном месте (в менеджере паролей) и удалите его из загрузок.",
   "The keys are saved to a file": "Ключи сохранены в файл",
