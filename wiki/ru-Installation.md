@@ -58,14 +58,14 @@ cd /opt/network-control
 4. **«Маршрутизация → Загрузить ip-list.json»**: список сайтов применяется на роутере и загружается в ClickHouse.
 5. **«Настройки → Telegram-бот»**: по желанию подключите уведомления.
 
-Образы берутся из GitHub Container Registry, версия задаётся `NC_VERSION` в `.env`:
+Образы берутся из реестра OneDev, версия задаётся `NC_VERSION` в `.env`:
 
 | Образ | Платформы |
 |---|---|
-| `ghcr.io/sbrw-evc/network-control-backend` | linux/amd64, linux/arm64 |
-| `ghcr.io/sbrw-evc/network-control-frontend` | linux/amd64, linux/arm64 |
-| `ghcr.io/sbrw-evc/network-control-flow-collector` | linux/amd64, linux/arm64 |
-| `ghcr.io/sbrw-evc/network-control-awg-client` | linux/amd64 |
+| `onedev.evcsbrw.ru/monitoring/harbor/backend` | linux/amd64 |
+| `onedev.evcsbrw.ru/monitoring/harbor/frontend` | linux/amd64 |
+| `onedev.evcsbrw.ru/monitoring/harbor/flow-collector` | linux/amd64 |
+| `onedev.evcsbrw.ru/monitoring/harbor/awg-client` | linux/amd64 |
 
 ## Обновление
 

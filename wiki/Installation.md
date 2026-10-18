@@ -58,14 +58,14 @@ The **First steps** checklist of the overview then leads through the rest:
 4. **Routing → Upload ip-list.json** — the site list is applied on the router and loaded into ClickHouse.
 5. **Settings → Telegram bot** — optionally connect notifications.
 
-Images come from GitHub Container Registry; the version is `NC_VERSION` in `.env`:
+Images come from the OneDev registry; the version is `NC_VERSION` in `.env`:
 
 | Image | Platforms |
 |---|---|
-| `ghcr.io/sbrw-evc/network-control-backend` | linux/amd64, linux/arm64 |
-| `ghcr.io/sbrw-evc/network-control-frontend` | linux/amd64, linux/arm64 |
-| `ghcr.io/sbrw-evc/network-control-flow-collector` | linux/amd64, linux/arm64 |
-| `ghcr.io/sbrw-evc/network-control-awg-client` | linux/amd64 |
+| `onedev.evcsbrw.ru/monitoring/harbor/backend` | linux/amd64 |
+| `onedev.evcsbrw.ru/monitoring/harbor/frontend` | linux/amd64 |
+| `onedev.evcsbrw.ru/monitoring/harbor/flow-collector` | linux/amd64 |
+| `onedev.evcsbrw.ru/monitoring/harbor/awg-client` | linux/amd64 |
 
 ## Updating
 
