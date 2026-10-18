@@ -398,8 +398,8 @@ class Detector:
         w = int(p["window"])
         rows = await self._q(
             f"SELECT {ip_text('ea')} AS ip, idx, dir, "
-            f"dictGetOrDefault('flows.if_names', 'name', ({ip_text('ea')}, idx), toString(idx)) AS name, "
-            f"dictGetOrDefault('flows.if_names', 'speed', ({ip_text('ea')}, idx), toUInt64(0)) AS speed, "
+            f"dictGetOrDefault('if_names', 'name', ({ip_text('ea')}, idx), toString(idx)) AS name, "
+            f"dictGetOrDefault('if_names', 'speed', ({ip_text('ea')}, idx), toUInt64(0)) AS speed, "
             f"{FIELDS['exportername'].column.replace('ExporterAddress', 'ea')} AS exporter, sum(b) * 8 / {w} AS bps FROM ("
             f"SELECT ExporterAddress AS ea, InIf AS idx, 'in' AS dir, Bytes AS b FROM flows WHERE TimeReceived >= now() - {w} "
             f"AND InIf != 0 AND ({where}) UNION ALL SELECT ExporterAddress AS ea, OutIf AS idx, 'out' AS dir, Bytes AS b "

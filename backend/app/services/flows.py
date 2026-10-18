@@ -454,8 +454,8 @@ class FlowService:
             "FROM flows WHERE TimeReceived >= now() - 86400 GROUP BY addr, name ORDER BY bps DESC")
         ifs = await self._ch.query(
             f"SELECT {ip_text('ea')} AS addr, idx, "
-            f"dictGetOrDefault('flows.if_names', 'name', ({ip_text('ea')}, idx), toString(idx)) AS name, "
-            f"dictGetOrDefault('flows.if_names', 'speed', ({ip_text('ea')}, idx), toUInt64(0)) AS speed, "
+            f"dictGetOrDefault('if_names', 'name', ({ip_text('ea')}, idx), toString(idx)) AS name, "
+            f"dictGetOrDefault('if_names', 'speed', ({ip_text('ea')}, idx), toUInt64(0)) AS speed, "
             "sum(i) * 8 / 300 AS in_bps, sum(o) * 8 / 300 AS out_bps FROM ("
             "SELECT ExporterAddress AS ea, InIf AS idx, Bytes AS i, toUInt64(0) AS o FROM flows "
             "WHERE TimeReceived >= now() - 300 AND InIf != 0 UNION ALL "
@@ -497,7 +497,7 @@ class FlowService:
     async def refresh_ptr(self, limit: int = 300) -> int:
         rows = await self._ch.query(
             f"SELECT {ip_text('RemoteAddr')} AS ip FROM flows WHERE TimeReceived >= now() - 3600 "
-            f"AND dictGetOrDefault('flows.ptr', 'name', {ip_key('RemoteAddr')}, '') = '' "
+            f"AND dictGetOrDefault('ptr', 'name', {ip_key('RemoteAddr')}, '') = '' "
             f"GROUP BY ip ORDER BY sum(Bytes) DESC LIMIT {int(limit)}")
         loop = asyncio.get_running_loop()
         sem = asyncio.Semaphore(20)

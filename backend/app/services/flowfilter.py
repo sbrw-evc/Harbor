@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from ..domain.errors import DomainError
 
 PROTOCOLS = {"icmp": 1, "tcp": 6, "udp": 17, "gre": 47, "esp": 50, "ah": 51, "sctp": 132}
-SITES_DICT = "flows.sites"
+SITES_DICT = "sites"  # dictionaries are found in the database of the query, whatever its name
 APPS = {
     20: "FTP", 21: "FTP", 22: "SSH", 23: "Telnet", 25: "SMTP", 53: "DNS", 67: "DHCP", 68: "DHCP", 69: "TFTP", 80: "HTTP",
     110: "POP3", 123: "NTP", 137: "NetBIOS", 138: "NetBIOS", 139: "NetBIOS", 143: "IMAP", 161: "SNMP", 162: "SNMP",
@@ -54,11 +54,11 @@ def ch_ip(text: str) -> str:
 
 # ExporterAddress of flows whose exporter is unknown.
 NO_EXPORTER = "ExporterAddress IN (toIPv6('::'), toIPv6('::ffff:0.0.0.0'))"
-EXPORTER_NAME = f"dictGetOrDefault('flows.exporters', 'name', {ip_key('ExporterAddress')}, {ip_text('ExporterAddress')})"
+EXPORTER_NAME = f"dictGetOrDefault('exporters', 'name', {ip_key('ExporterAddress')}, {ip_text('ExporterAddress')})"
 
 
 def _ifname(col: str) -> str:
-    return (f"dictGetOrDefault('flows.if_names', 'name', ({ip_text('ExporterAddress')}, {col}), "
+    return (f"dictGetOrDefault('if_names', 'name', ({ip_text('ExporterAddress')}, {col}), "
             f"if({col} = 0, '—', toString({col})))")
 
 
@@ -76,12 +76,12 @@ FIELDS: dict[str, Field] = {f.name.lower(): f for f in (
     Field("Direction", "enum", "Direction", "Direction", "toString(Direction)", True),
     Field("Route", "enum", "Route", "Route", "toString(Route)", True),
     Field("LocalAddr", "ip", "LocalAddr", "Local address", ip_text("LocalAddr"), True),
-    Field("LocalHost", "string", f"dictGetOrDefault('flows.hosts', 'name', {ip_key('LocalAddr')}, {ip_text('LocalAddr')})",
-          "Local device", f"dictGetOrDefault('flows.hosts', 'name', {ip_key('LocalAddr')}, {ip_text('LocalAddr')})", True),
+    Field("LocalHost", "string", f"dictGetOrDefault('hosts', 'name', {ip_key('LocalAddr')}, {ip_text('LocalAddr')})",
+          "Local device", f"dictGetOrDefault('hosts', 'name', {ip_key('LocalAddr')}, {ip_text('LocalAddr')})", True),
     Field("RemoteAddr", "ip", "RemoteAddr", "Remote address", ip_text("RemoteAddr")),
     Field("RemoteNet", "ip", "RemoteAddr", "Remote network (/24, /64)", remote_net("RemoteAddr")),
-    Field("RemoteHost", "string", f"dictGetOrDefault('flows.ptr', 'name', {ip_key('RemoteAddr')}, '')", "Remote host (PTR)",
-          f"dictGetOrDefault('flows.ptr', 'name', {ip_key('RemoteAddr')}, {ip_text('RemoteAddr')})"),
+    Field("RemoteHost", "string", f"dictGetOrDefault('ptr', 'name', {ip_key('RemoteAddr')}, '')", "Remote host (PTR)",
+          f"dictGetOrDefault('ptr', 'name', {ip_key('RemoteAddr')}, {ip_text('RemoteAddr')})"),
     Field("RemoteAS", "asn", "RemoteAS", "AS", "concat('AS', toString(RemoteAS), ' ', RemoteASName)", True),
     Field("RemoteASName", "string", "RemoteASName", "AS organization", "RemoteASName", True),
     Field("RemoteCountry", "string", "RemoteCountry", "Country", "RemoteCountry", True),
@@ -89,8 +89,8 @@ FIELDS: dict[str, Field] = {f.name.lower(): f for f in (
           f"dictGetOrDefault('{SITES_DICT}', 'site', tuple(RemoteAddr), '—')"),
     Field("SiteGroup", "string", f"dictGetOrDefault('{SITES_DICT}', 'grp', tuple(RemoteAddr), '')", "Site group",
           f"dictGetOrDefault('{SITES_DICT}', 'grp', tuple(RemoteAddr), '—')"),
-    Field("Threat", "string", "dictGetOrDefault('flows.threats', 'list', tuple(RemoteAddr), '')", "Threat list",
-          "dictGetOrDefault('flows.threats', 'list', tuple(RemoteAddr), '—')"),
+    Field("Threat", "string", "dictGetOrDefault('threats', 'list', tuple(RemoteAddr), '')", "Threat list",
+          "dictGetOrDefault('threats', 'list', tuple(RemoteAddr), '—')"),
     Field("Proto", "proto", "Proto", "Protocol",
           "transform(Proto, [1, 6, 17, 47, 50, 51, 132], ['ICMP', 'TCP', 'UDP', 'GRE', 'ESP', 'AH', 'SCTP'], toString(Proto))", True),
     Field("Application", "string", APP_EXPR, "Application", APP_EXPR, True),

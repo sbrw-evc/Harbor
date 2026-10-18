@@ -4,10 +4,17 @@ import re
 
 from chdb import session as chs
 
+# chdb runs one embedded server per process, on the path of its first session: every test shares it, each with its
+# own database.
+_SESSION = None
+
 
 class ChdbClient:
     def __init__(self, path: str, database: str = "flows"):
-        self.s = chs.Session(path)
+        global _SESSION
+        if _SESSION is None:
+            _SESSION = chs.Session(path)
+        self.s = _SESSION
         self.database = database
         self.user = "default"
         self.password = ""
