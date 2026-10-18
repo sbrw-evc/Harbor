@@ -15,4 +15,6 @@ export TEST_DATABASE_URL=postgresql+asyncpg://postgres@127.0.0.1:5432/test
 
 pip install -q --no-cache-dir -r backend/requirements.txt -r backend/requirements-dev.txt
 cd backend
-python -m pytest -q -p no:cacheprovider --cov=app --cov-report=xml:coverage.xml --cov-report=term tests
+# The collector and the VPS proxy are tested from here too.
+python -m pytest -q -p no:cacheprovider --cov=app --cov=../flow-collector --cov=../vps \
+  --cov-report=xml:coverage.xml --cov-report=term tests
