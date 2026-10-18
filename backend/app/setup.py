@@ -1,6 +1,6 @@
 """The life of the process before and after the setup wizard: it runs in setup mode until bootstrap.json exists, then
 builds the container and starts it. Every process watches for the file, so the one that did not serve the storage step
-follows within seconds."""
+follows within seconds, or at once when it is asked for the stage."""
 from __future__ import annotations
 
 import asyncio
@@ -63,6 +63,11 @@ class SetupState:
 
     async def stage(self) -> str:
         c = self.container
+        if c is None and self.boot.exists():
+            # Another process has just served the storage step: start on it now rather than on the next tick of the
+            # watcher, so that no process answers "storage" after the wizard has moved on.
+            await self.activate()
+            c = self.container
         if c is None:
             return STAGE_STORAGE
         mode = await c.settings.get("auth_mode")

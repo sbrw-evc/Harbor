@@ -100,7 +100,9 @@ def fake_bao():
             return httpx.Response(200, json={"initialized": st["initialized"]})
         if p == "/v1/sys/init" and m == "PUT":
             st["initialized"] = True
-            return httpx.Response(200, json={"root_token": "root-1", "recovery_keys_b64": ["rec-1"]})
+            return httpx.Response(200, json={  # what OpenBao 2.x answers with a static seal
+                "keys": [], "keys_base64": [], "recovery_keys": ["7265632d31"], "recovery_keys_base64": ["rec-1"],
+                "root_token": "root-1"})
         if p == "/v1/sys/seal-status":
             return httpx.Response(200, json={"sealed": False, "initialized": st["initialized"]})
         if p == "/v1/sys/health":  # raft takes a moment to become active after the unseal
@@ -175,6 +177,27 @@ def test_bootstrap_file_has_no_password(tmp_path):
     assert "password" not in boot.path.read_text()
     # Without DATABASE_URL and the old AppRole files there is nothing to take over.
     assert asyncio.run(Bootstrap(str(tmp_path / "other"), str(tmp_path / "none")).import_legacy({})) is False
+
+
+def test_stage_follows_storage_saved_by_another_process(tmp_path):
+    from app.setup import STAGE_ACCOUNT, STAGE_STORAGE, SetupState
+
+    async def scenario():
+        app = SimpleNamespace()
+        st = SetupState(SimpleNamespace(data_dir=str(tmp_path), bao_approle_dir=str(tmp_path / "none")), app)
+        started = []
+
+        async def activate():  # stands for building and starting the container on bootstrap.json
+            started.append(True)
+            app.container = SimpleNamespace(settings=SimpleNamespace(get=lambda key: asyncio.sleep(0)))
+            return True
+        st.activate = activate
+        assert await st.stage() == STAGE_STORAGE and not started  # nothing is saved yet
+        # The other process wrote bootstrap.json: this one answers with the next stage at once, not after its watcher.
+        st.boot.write({"postgres": {}, "clickhouse": {}, "openbao": {}})
+        assert await st.stage() == STAGE_ACCOUNT and started == [True]
+
+    asyncio.run(scenario())
 
 
 # The files of the side containers ---------------------------------------------------------------------------------

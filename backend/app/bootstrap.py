@@ -275,7 +275,7 @@ class BaoInitializer:
                 init = r.json()
                 root_token = init["root_token"]
                 shown = {"root_token": root_token,
-                         "recovery_key": (init.get("recovery_keys_b64") or init.get("keys_base64") or [""])[0]}
+                         "recovery_key": (init.get("recovery_keys_base64") or init.get("recovery_keys") or [""])[0]}
                 _write_private(self._pending, json.dumps(shown))
             elif not root_token and self._pending.exists():
                 shown = json.loads(self._pending.read_text())  # the first attempt failed after the initialisation
