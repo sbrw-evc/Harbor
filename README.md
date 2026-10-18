@@ -143,14 +143,14 @@ Step by step — [Installation](https://onedev.evcsbrw.ru/Monitoring/Harbor/~wik
 
 ## Docker images
 
-Every release publishes images to GitHub Container Registry (tags `X.Y.Z`, `X.Y`, `latest`):
+Every release publishes images to the OneDev registry (tags `X.Y.Z`, `X.Y`, `latest`); the same tags are copied to GitHub Container Registry as `ghcr.io/sbrw-evc/network-control-*`:
 
 | Image | Platforms |
 |---|---|
-| `ghcr.io/sbrw-evc/network-control-backend` | linux/amd64, linux/arm64 |
-| `ghcr.io/sbrw-evc/network-control-frontend` | linux/amd64, linux/arm64 |
-| `ghcr.io/sbrw-evc/network-control-flow-collector` | linux/amd64, linux/arm64 |
-| `ghcr.io/sbrw-evc/network-control-awg-client` | linux/amd64 |
+| `onedev.evcsbrw.ru/monitoring/harbor/backend` | linux/amd64 |
+| `onedev.evcsbrw.ru/monitoring/harbor/frontend` | linux/amd64 |
+| `onedev.evcsbrw.ru/monitoring/harbor/flow-collector` | linux/amd64 |
+| `onedev.evcsbrw.ru/monitoring/harbor/awg-client` | linux/amd64 |
 
 The version is set by `NC_VERSION` in `.env`; `install.sh` pulls the images, `docker compose up -d --build` builds them locally.
 The release page also has `harbor-X.Y.Z-deploy.tar.gz` — everything needed to run the stack without cloning the repository.

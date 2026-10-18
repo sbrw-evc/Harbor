@@ -9,9 +9,9 @@ DIR="$OUT/$APP-$VERSION"
 rm -rf "$OUT"; mkdir -p "$DIR"
 cp -r docker-compose.yml .env.example .gitattributes install.sh LICENSE README.md README.ru.md \
   awg-client backend frontend flow-collector openbao clickhouse mikrotik "$DIR/"
-# The images of this version (on GitHub they keep the names network-control-* for existing installations).
+# The images of this version: docker-compose.yml names the OneDev registry, <prefix> replaces it (ghcr.io/sbrw-evc/network-control- for GitHub releases, where the images keep their old names for existing installations).
 sed -i "s/^NC_VERSION=.*/NC_VERSION=$VERSION/" "$DIR/.env.example"
-sed -i "s#ghcr.io/sbrw-evc/network-control-#$IMAGE#" "$DIR/docker-compose.yml"
+sed -i -e "s#onedev.evcsbrw.ru/monitoring/harbor/#$IMAGE#" -e 's#${NC_VERSION:-[0-9.]*}#${NC_VERSION:-'"$VERSION"'}#' "$DIR/docker-compose.yml"
 tar -C "$OUT" -czf "$OUT/$APP-$VERSION-deploy.tar.gz" "$APP-$VERSION"
 rm -rf "$DIR"
 ( cd "$OUT" && sha256sum "$APP-$VERSION-deploy.tar.gz" > SHA256SUMS )

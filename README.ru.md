@@ -145,14 +145,14 @@ cd /opt/network-control
 
 ## Docker-образы
 
-Каждый релиз публикует образы в GitHub Container Registry (теги `X.Y.Z`, `X.Y`, `latest`):
+Каждый релиз публикует образы в реестр OneDev (теги `X.Y.Z`, `X.Y`, `latest`); те же теги копируются в GitHub Container Registry как `ghcr.io/sbrw-evc/network-control-*`:
 
 | Образ | Платформы |
 |---|---|
-| `ghcr.io/sbrw-evc/network-control-backend` | linux/amd64, linux/arm64 |
-| `ghcr.io/sbrw-evc/network-control-frontend` | linux/amd64, linux/arm64 |
-| `ghcr.io/sbrw-evc/network-control-flow-collector` | linux/amd64, linux/arm64 |
-| `ghcr.io/sbrw-evc/network-control-awg-client` | linux/amd64 |
+| `onedev.evcsbrw.ru/monitoring/harbor/backend` | linux/amd64 |
+| `onedev.evcsbrw.ru/monitoring/harbor/frontend` | linux/amd64 |
+| `onedev.evcsbrw.ru/monitoring/harbor/flow-collector` | linux/amd64 |
+| `onedev.evcsbrw.ru/monitoring/harbor/awg-client` | linux/amd64 |
 
 Версия задаётся `NC_VERSION` в `.env`; `install.sh` скачивает образы, `docker compose up -d --build` собирает их локально.
 На странице релиза также есть `harbor-X.Y.Z-deploy.tar.gz` — всё необходимое для запуска без клонирования репозитория.
