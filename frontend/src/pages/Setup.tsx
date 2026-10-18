@@ -177,7 +177,16 @@ function CheckLine({ label, r, i }: { label: string; r?: CheckResult; i: number 
   );
 }
 
-function StorageStep({ code, onDone }: { code: string; onDone: (secrets: BaoSecrets | null) => void }) {
+function BackButton({ onBack }: { onBack?: () => void }) {
+  if (!onBack) return null;
+  return (
+    <motion.button whileTap={{ scale: 0.97 }} type="button" className="btn-ghost" onClick={onBack}>
+      <ArrowLeft size={14} /> {t("Back")}
+    </motion.button>
+  );
+}
+
+function StorageStep({ code, onDone, onBack }: { code: string; onDone: (secrets: BaoSecrets | null) => void; onBack?: () => void }) {
   const state = useQuery({ queryKey: ["setup"], queryFn: () => api.setup.state() });
   const d = state.data?.defaults;
   const [form, setForm] = useState<StorageInput | null>(null);
@@ -273,7 +282,9 @@ function StorageStep({ code, onDone }: { code: string; onDone: (secrets: BaoSecr
           </div>
         )}
       </Reveal>
-      <div className="flex justify-end gap-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <BackButton onBack={onBack} />
+        <div className="flex-1" />
         <motion.button whileTap={{ scale: 0.97 }} type="button" className="btn-ghost" disabled={!!busy} onClick={() => run("check")}>
           <BusyIcon busy={busy === "check"} /> {t("Check")}
         </motion.button>
@@ -348,7 +359,7 @@ function SecretsStep({ secrets, onDone }: { secrets: BaoSecrets; onDone: () => v
   );
 }
 
-function AccountStep({ code }: { code: string }) {
+function AccountStep({ code, onBack }: { code: string; onBack?: () => void }) {
   const bootstrap = useAuth((s) => s.bootstrap);
   const [mode, setMode] = useState<AuthMode>("local");
   const [base, setBase] = useState(window.location.origin);
@@ -420,9 +431,12 @@ function AccountStep({ code }: { code: string }) {
           </div>
         )}
       </motion.div>
-      <motion.button whileTap={{ scale: 0.98 }} className="btn-primary w-full" disabled={busy || (mode === "local" ? !form.username || !form.password || form.password !== form.repeat : !form.key)}>
-        <BusyIcon busy={busy} icon={<UserPlus size={16} />} /> {mode === "local" ? t("Create the administrator and sign in") : t("Connect Keystone and sign in")}
-      </motion.button>
+      <div className="flex items-center gap-2">
+        <BackButton onBack={onBack} />
+        <motion.button whileTap={{ scale: 0.98 }} className="btn-primary flex-1" disabled={busy || (mode === "local" ? !form.username || !form.password || form.password !== form.repeat : !form.key)}>
+          <BusyIcon busy={busy} icon={<UserPlus size={16} />} /> {mode === "local" ? t("Create the administrator and sign in") : t("Connect Keystone and sign in")}
+        </motion.button>
+      </div>
     </form>
   );
 }
@@ -454,24 +468,17 @@ export default function SetupPage() {
   // OpenBao shown in this browser. The saved storage itself cannot be edited again: the server has moved on.
   const canVisit = (i: number) => i === reached || (i === 0 && reached === 1) || (i === 2 && reached === 3 && !!secrets);
   const step = view !== null && canVisit(view) ? view : reached;
-  const back = step === 1 ? 0 : step === 3 && secrets ? 2 : null;
   const go = (i: number) => setView(i === reached ? null : i);
   const panes: [number, boolean, ReactNode][] = [
     [0, true, <CodeStep onDone={(c) => { setCode(c); setView(null); void state.refetch(); }} />],
-    [1, !!code && !storageSaved, code && <StorageStep code={code} onDone={(s) => { setSecrets(s); setStorageSaved(true); setView(null); void state.refetch(); }} />],
+    [1, !!code && !storageSaved, code && <StorageStep code={code} onBack={() => go(0)} onDone={(s) => { setSecrets(s); setStorageSaved(true); setView(null); void state.refetch(); }} />],
     [2, !!secrets, secrets && <SecretsStep secrets={secrets} onDone={() => { setKeysSaved(true); setView(null); }} />],
-    [3, reached === 3, code && <AccountStep code={code} />],
+    [3, reached === 3, code && <AccountStep code={code} onBack={secrets ? () => go(2) : undefined} />],
   ];
   return (
     <MotionConfig reducedMotion="user">
       <Shell wide={step > 0}>
         <Steps current={step} reached={reached} compact={step === 0} canPick={(i) => i !== step && canVisit(i)} onPick={go} />
-        {back !== null && (
-          <motion.button type="button" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="btn-ghost btn-sm -mt-3 mb-3"
-            onClick={() => go(back)}>
-            <ArrowLeft size={14} /> {t("Back")}
-          </motion.button>
-        )}
         {/* The steps stay mounted, so going back and forth keeps what was typed; the shown one slides in from the side
             it comes from. No AnimatePresence mode="wait": with animated parts inside it kept the old step for good. */}
         {panes.map(([i, mounted, node]) => mounted && (
