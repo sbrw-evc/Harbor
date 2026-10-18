@@ -4,6 +4,7 @@ Every release is analysed by [SonarQube](http://192.168.0.104:9000/dashboard?id=
 
 | Release | Date | Quality gate | Bugs | Vulnerabilities | Code smells | Coverage | Duplications | Commit |
 |---|---|---|---|---|---|---|---|---|
+| [v2.0.7](SonarQube-v2.0.7.md) | 2026-10-18 | Passed | 0 | 0 | 0 | 82.6% | 0.0% | [`e38af6f`](http://192.168.0.104:9000/dashboard?id=monitoring-harbor) |
 | [v2.0.6](SonarQube-v2.0.6.md) | 2026-10-18 | Passed | 0 | 0 | 0 | 82.6% | 0.0% | [`c0dec15`](http://192.168.0.104:9000/dashboard?id=monitoring-harbor) |
 | [v2.0.5](SonarQube-v2.0.5.md) | 2026-10-18 | Passed | 0 | 0 | 0 | 82.4% | 0.0% | [`ffe3889`](http://192.168.0.104:9000/dashboard?id=monitoring-harbor) |
 | [v2.0.4](SonarQube-v2.0.4.md) | 2026-10-18 | Passed | 32 | 13 | 95 | 28.4% | 0.3% | [`e312a10`](http://192.168.0.104:9000/dashboard?id=monitoring-harbor) |
