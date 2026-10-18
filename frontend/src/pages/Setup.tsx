@@ -1,10 +1,12 @@
 import { useQuery } from "@tanstack/react-query";
-import { Activity, AlertTriangle, CheckCircle2, Copy, Database, KeyRound, Loader2, ShieldCheck, UserPlus } from "lucide-react";
-import { useEffect, useState, type FormEvent, type ReactNode } from "react";
+import { AlertTriangle, Check, CheckCircle2, Copy, Database, KeyRound, Loader2, ShieldCheck, UserPlus } from "lucide-react";
+import { AnimatePresence, MotionConfig, motion } from "framer-motion";
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { Navigate } from "react-router-dom";
 import clsx from "clsx";
 import { api } from "@/lib/api";
 import { copyText } from "@/lib/hooks";
+import { notify } from "@/lib/notify";
 import type { AuthMode, StorageCheck, StorageInput } from "@/lib/types";
 import { useAuth } from "@/store/auth";
 import { Field } from "@/components/ui/Primitives";
@@ -13,6 +15,9 @@ import PasswordInput from "@/components/ui/PasswordInput";
 import { t, tServer } from "@/i18n";
 
 const CODE_KEY = "nc_setup_code";
+const SPRING = { type: "spring", stiffness: 320, damping: 32 } as const;
+
+type BaoSecrets = { root_token: string; recovery_key: string };
 
 function readCode(): string {
   try {
@@ -33,60 +38,86 @@ function keepCode(code: string) {
 function Shell({ children, wide }: { children: ReactNode; wide?: boolean }) {
   return (
     <div className="flex min-h-screen items-center justify-center p-4">
-      <div className={clsx("card w-full p-7 shadow-2xl", wide ? "max-w-3xl" : "max-w-md")}>
-        <div className="mb-6 flex items-center gap-3">
-          <div className="grid h-11 w-11 place-items-center rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 shadow-glow">
-            <Activity className="text-white" size={22} />
-          </div>
+      <motion.div layout initial={{ opacity: 0, y: 16, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={SPRING}
+        className={clsx("card w-full overflow-hidden p-7 shadow-2xl", wide ? "max-w-3xl" : "max-w-md")}>
+        <motion.div layout="position" className="mb-6 flex items-center gap-3">
+          <motion.img src="/favicon.svg" alt="" className="h-11 w-11 rounded-xl shadow-glow" whileHover={{ rotate: -8, scale: 1.05 }} />
           <div>
             <div className="text-lg font-semibold text-slate-100">Harbor</div>
             <div className="text-xs text-slate-400">{t("Setup wizard")}</div>
           </div>
-        </div>
+        </motion.div>
         {children}
-      </div>
+      </motion.div>
     </div>
   );
 }
 
-function ErrorBox({ message }: { message: string | null }) {
-  if (!message) return null;
+/** In the narrow card only the current step is named, the others are numbers. */
+function Steps({ current, compact }: { current: number; compact?: boolean }) {
+  const names = [t("Setup code"), t("Storage"), t("OpenBao keys"), t("Sign-in")];
   return (
-    <div role="alert" className="flex items-start gap-2 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-200">
-      <AlertTriangle size={16} className="mt-0.5 shrink-0" /> {message}
-    </div>
-  );
-}
-
-function Steps({ current }: { current: number }) {
-  const names = [t("Setup code"), t("Storage"), t("Sign-in")];
-  return (
-    <ol className="mb-6 flex gap-2 text-xs">
+    <motion.ol layout="position" className="mb-6 flex gap-2 text-xs">
       {names.map((n, i) => (
-        <li key={n} className={clsx("flex-1 rounded-md border px-2 py-1.5 text-center",
+        <li key={n} title={n} className={clsx("relative flex items-center justify-center gap-1 whitespace-nowrap rounded-md border px-2 py-1.5 text-center transition-colors duration-300",
+          compact && i !== current ? "flex-none px-3" : "flex-1",
           i < current ? "border-green-500/40 text-green-300" : i === current ? "border-accent text-slate-100" : "border-base-700 text-slate-500")}>
-          {i + 1}. {n}
+          {i === current && <motion.span layoutId="setup-step" className="absolute inset-0 rounded-md bg-accent/10" transition={SPRING} />}
+          <AnimatePresence initial={false}>
+            {i < current && (
+              <motion.span initial={{ scale: 0, width: 0 }} animate={{ scale: 1, width: "auto" }} exit={{ scale: 0, width: 0 }} transition={SPRING}>
+                <Check size={12} />
+              </motion.span>
+            )}
+          </AnimatePresence>
+          <span className="relative">{compact && i !== current ? i + 1 : `${i + 1}. ${n}`}</span>
         </li>
       ))}
-    </ol>
+    </motion.ol>
+  );
+}
+
+/** Opens and closes its content by height, so the card grows smoothly. */
+function Reveal({ show, children }: { show: boolean; children: ReactNode }) {
+  return (
+    <AnimatePresence initial={false}>
+      {show && (
+        <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }}
+          transition={{ duration: 0.22, ease: "easeOut" }} className="overflow-hidden">
+          {children}
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+}
+
+function BusyIcon({ busy, icon }: { busy: boolean; icon?: ReactNode }) {
+  return (
+    busy ? (
+      <motion.span key="busy" initial={{ opacity: 0, rotate: -90 }} animate={{ opacity: 1, rotate: 0 }} transition={{ duration: 0.15 }}>
+        <Loader2 size={16} className="animate-spin" />
+      </motion.span>
+    ) : icon ? (
+      <motion.span key="idle" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.15 }}>{icon}</motion.span>
+    ) : null
   );
 }
 
 function CodeStep({ onDone }: { onDone: (code: string) => void }) {
   const [code, setCode] = useState(readCode);
-  const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [shake, setShake] = useState(0);
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     setBusy(true);
-    setError(null);
     try {
       await api.setup.verify(code);
       keepCode(code);
+      notify.success(t("The setup code is accepted"));
       onDone(code);
     } catch (err) {
-      setError((err as Error).message);
-    } finally {
+      notify.error(t("The setup code is not accepted"), (err as Error).message);
+      setShake((s) => s + 1);
       setBusy(false);
     }
   };
@@ -95,36 +126,40 @@ function CodeStep({ onDone }: { onDone: (code: string) => void }) {
       <p className="text-sm text-slate-300">{t("Harbor is not set up yet. Enter the one-time setup code: install.sh printed it, and it is in the log of the backend.")}</p>
       <pre className="mono overflow-x-auto rounded-lg bg-base-900 px-3 py-2 text-xs text-slate-300">docker compose logs backend | grep "setup code"</pre>
       <Field label={t("Setup code")}>
-        <input className="input mono text-center text-lg tracking-[.25em]" autoFocus value={code} maxLength={20}
+        <motion.input key={shake} className="input mono text-center text-lg tracking-[.25em]" autoFocus value={code} maxLength={20}
+          animate={shake ? { x: [0, -8, 8, -6, 6, -3, 0] } : undefined} transition={{ duration: 0.4 }}
           onChange={(e) => setCode(e.target.value.toUpperCase())} />
       </Field>
-      <ErrorBox message={error} />
-      <button className="btn-primary w-full" disabled={code.trim().length < 12 || busy}>
-        {busy ? <Loader2 size={16} className="animate-spin" /> : <KeyRound size={16} />} {t("Continue")}
-      </button>
+      <motion.button whileTap={{ scale: 0.98 }} className="btn-primary w-full" disabled={code.trim().length < 12 || busy}>
+        <BusyIcon busy={busy} icon={<KeyRound size={16} />} /> {t("Continue")}
+      </motion.button>
     </form>
   );
 }
 
-function CheckLine({ label, r }: { label: string; r?: { ok: boolean; error?: string; version?: string } }) {
+type CheckResult = { ok: boolean; error?: string; version?: string };
+
+function checkText(r: CheckResult): string {
+  return r.ok ? (r.version ? t("works, version {v}", { v: r.version }) : t("works")) : tServer(r.error ?? "");
+}
+
+function CheckLine({ label, r, i }: { label: string; r?: CheckResult; i: number }) {
   if (!r) return null;
   return (
-    <div className={clsx("flex items-start gap-2 text-sm", r.ok ? "text-green-300" : "text-red-300")}>
+    <motion.div initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.08 }}
+      className={clsx("flex items-start gap-2 text-sm", r.ok ? "text-green-300" : "text-red-300")}>
       {r.ok ? <CheckCircle2 size={15} className="mt-0.5 shrink-0" /> : <AlertTriangle size={15} className="mt-0.5 shrink-0" />}
-      <span>{label}: {r.ok ? (r.version ? t("works, version {v}", { v: r.version }) : t("works")) : tServer(r.error ?? "")}</span>
-    </div>
+      <span>{label}: {checkText(r)}</span>
+    </motion.div>
   );
 }
 
-function StorageStep({ code, onDone }: { code: string; onDone: () => void }) {
+function StorageStep({ code, onDone }: { code: string; onDone: (secrets: BaoSecrets | null) => void }) {
   const state = useQuery({ queryKey: ["setup"], queryFn: () => api.setup.state() });
   const d = state.data?.defaults;
   const [form, setForm] = useState<StorageInput | null>(null);
   const [check, setCheck] = useState<StorageCheck | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<"" | "check" | "save">("");
-  const [shown, setShown] = useState<{ root_token: string; recovery_key: string } | null>(null);
-  const [saved, setSaved] = useState(false);
 
   useEffect(() => {
     if (d && !form) setForm({
@@ -136,43 +171,33 @@ function StorageStep({ code, onDone }: { code: string; onDone: () => void }) {
 
   if (!form) return <div className="flex items-center gap-2 py-6 text-sm text-slate-400"><Loader2 size={16} className="animate-spin" /> {t("Loading…")}</div>;
 
-  const pg = (k: keyof StorageInput["postgres"], v: string | number) => setForm({ ...form, postgres: { ...form.postgres, [k]: v } });
-  const ch = (k: keyof StorageInput["clickhouse"], v: string) => setForm({ ...form, clickhouse: { ...form.clickhouse, [k]: v } });
-  const bao = (k: keyof StorageInput["openbao"], v: string) => setForm({ ...form, openbao: { ...form.openbao, [k]: v } });
+  // A change makes the last check stale: its results go away.
+  const edit = (next: StorageInput) => { setForm(next); setCheck(null); };
+  const pg = (k: keyof StorageInput["postgres"], v: string | number) => edit({ ...form, postgres: { ...form.postgres, [k]: v } });
+  const ch = (k: keyof StorageInput["clickhouse"], v: string) => edit({ ...form, clickhouse: { ...form.clickhouse, [k]: v } });
+  const bao = (k: keyof StorageInput["openbao"], v: string) => edit({ ...form, openbao: { ...form.openbao, [k]: v } });
 
   const run = async (what: "check" | "save") => {
     setBusy(what);
-    setError(null);
     try {
-      if (what === "check") setCheck(await api.setup.checkStorage(code, form));
-      else {
+      if (what === "check") {
+        const r = await api.setup.checkStorage(code, form);
+        setCheck(r);
+        ([["PostgreSQL", r.postgres], ["ClickHouse", r.clickhouse], ["OpenBao", r.openbao]] as const).forEach(([name, res]) =>
+          res.ok ? notify.success(name, checkText(res)) : notify.error(t("{name} does not answer", { name }), checkText(res)));
+        if (r.postgres.ok && !r.postgres.timescaledb) notify.warning("TimescaleDB", t("TimescaleDB is not available: time series are kept in ordinary tables."));
+        setBusy("");
+      } else {
         const r = await api.setup.storage(code, form);
-        if (r.openbao) setShown(r.openbao);
-        else onDone();
+        notify.success(t("The storage is saved"), t("Harbor keeps its data in PostgreSQL, ClickHouse and OpenBao."));
+        if (r.openbao) notify.warning(t("OpenBao is initialised"), t("Save its root token and recovery key: they are shown once."));
+        onDone(r.openbao);
       }
     } catch (err) {
-      setError((err as Error).message);
-    } finally {
+      notify.error(what === "check" ? t("The check failed") : t("The storage is not saved"), (err as Error).message);
       setBusy("");
     }
   };
-
-  if (shown) return (
-    <div className="space-y-4">
-      <div className="flex items-start gap-2 text-sm text-amber-200"><ShieldCheck size={16} className="mt-0.5 shrink-0" />
-        {t("OpenBao is initialised. Save its root token and recovery key now, in a password manager: they are shown once and kept nowhere. They are needed to restore OpenBao or to administer it by hand.")}</div>
-      {([["Root token", shown.root_token], ["Recovery key", shown.recovery_key]] as const).map(([label, value]) => (
-        <Field key={label} label={t(label)}>
-          <div className="flex gap-2">
-            <input className="input mono" readOnly value={value} />
-            <button type="button" className="btn-ghost" onClick={() => copyText(value)}><Copy size={14} /></button>
-          </div>
-        </Field>
-      ))}
-      <Checkbox checked={saved} onChange={setSaved} label={t("I have saved the root token and the recovery key")} />
-      <button className="btn-primary w-full" disabled={!saved} onClick={onDone}>{t("Continue")}</button>
-    </div>
-  );
 
   return (
     <form className="space-y-5" onSubmit={(e) => { e.preventDefault(); run("save"); }}>
@@ -203,34 +228,88 @@ function StorageStep({ code, onDone }: { code: string; onDone: () => void }) {
           hint={t("If it was initialised before, enter its root token.")} />
         <Radio checked={form.openbao.mode === "external"} onChange={() => bao("mode", "external")} label={t("An external OpenBao")}
           hint={t("An AppRole with read, write and list rights on a KV v2 mount.")} />
-        {form.openbao.mode === "bundled" ? (
-          <Field label={t("Root token (only if initialised before)")}><PasswordInput value={form.openbao.root_token ?? ""} onChange={(e) => bao("root_token", e.target.value)} /></Field>
-        ) : (
-          <div className="grid gap-3 sm:grid-cols-3">
-            <Field label="role_id"><input className="input mono" value={form.openbao.role_id ?? ""} onChange={(e) => bao("role_id", e.target.value)} /></Field>
-            <Field label="secret_id"><PasswordInput value={form.openbao.secret_id ?? ""} onChange={(e) => bao("secret_id", e.target.value)} /></Field>
-            <Field label={t("KV mount")}><input className="input mono" value={form.openbao.mount ?? ""} onChange={(e) => bao("mount", e.target.value)} /></Field>
+        <motion.div key={form.openbao.mode} initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.18 }}>
+          {form.openbao.mode === "bundled" ? (
+            <Field label={t("Root token (only if initialised before)")}><PasswordInput value={form.openbao.root_token ?? ""} onChange={(e) => bao("root_token", e.target.value)} /></Field>
+          ) : (
+            <div className="grid gap-3 sm:grid-cols-3">
+              <Field label="role_id"><input className="input mono" value={form.openbao.role_id ?? ""} onChange={(e) => bao("role_id", e.target.value)} /></Field>
+              <Field label="secret_id"><PasswordInput value={form.openbao.secret_id ?? ""} onChange={(e) => bao("secret_id", e.target.value)} /></Field>
+              <Field label={t("KV mount")}><input className="input mono" value={form.openbao.mount ?? ""} onChange={(e) => bao("mount", e.target.value)} /></Field>
+            </div>
+          )}
+        </motion.div>
+      </fieldset>
+      <Reveal show={!!check}>
+        {check && (
+          <div className="space-y-1.5 rounded-lg border border-base-700 px-3 py-2">
+            <CheckLine i={0} label="PostgreSQL" r={check.postgres} />
+            {check.postgres.ok && !check.postgres.timescaledb && <div className="pl-6 text-xs text-amber-300">{t("TimescaleDB is not available: time series are kept in ordinary tables.")}</div>}
+            <CheckLine i={1} label="ClickHouse" r={check.clickhouse} />
+            <CheckLine i={2} label="OpenBao" r={check.openbao} />
           </div>
         )}
-      </fieldset>
-      {check && (
-        <div className="space-y-1.5 rounded-lg border border-base-700 px-3 py-2">
-          <CheckLine label="PostgreSQL" r={check.postgres} />
-          {check.postgres.ok && !check.postgres.timescaledb && <div className="pl-6 text-xs text-amber-300">{t("TimescaleDB is not available: time series are kept in ordinary tables.")}</div>}
-          <CheckLine label="ClickHouse" r={check.clickhouse} />
-          <CheckLine label="OpenBao" r={check.openbao} />
-        </div>
-      )}
-      <ErrorBox message={error} />
+      </Reveal>
       <div className="flex justify-end gap-2">
-        <button type="button" className="btn-ghost" disabled={!!busy} onClick={() => run("check")}>
-          {busy === "check" && <Loader2 size={14} className="animate-spin" />} {t("Check")}
-        </button>
-        <button className="btn-primary" disabled={!!busy || !form.postgres.password || !form.clickhouse.password}>
-          {busy === "save" && <Loader2 size={14} className="animate-spin" />} {t("Save and continue")}
-        </button>
+        <motion.button whileTap={{ scale: 0.97 }} type="button" className="btn-ghost" disabled={!!busy} onClick={() => run("check")}>
+          <BusyIcon busy={busy === "check"} /> {t("Check")}
+        </motion.button>
+        <motion.button whileTap={{ scale: 0.97 }} className="btn-primary" disabled={!!busy || !form.postgres.password || !form.clickhouse.password}>
+          <BusyIcon busy={busy === "save"} /> {t("Save and continue")}
+        </motion.button>
       </div>
     </form>
+  );
+}
+
+/** The root token and the recovery key of a freshly initialised OpenBao. The step stays until the user confirms that
+ * they are saved: the stage of the server has moved on already, so nothing else may close it. */
+function SecretsStep({ secrets, onDone }: { secrets: BaoSecrets; onDone: () => void }) {
+  const [saved, setSaved] = useState(false);
+  const savedRef = useRef(saved);
+  savedRef.current = saved;
+
+  useEffect(() => {
+    const warn = (e: BeforeUnloadEvent) => {
+      if (savedRef.current) return;
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, []);
+
+  const rows = [[t("Root token"), secrets.root_token], [t("Recovery key"), secrets.recovery_key]] as const;
+  return (
+    <div className="space-y-4">
+      <div className="flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-200">
+        <ShieldCheck size={16} className="mt-0.5 shrink-0" />
+        {t("OpenBao is initialised. Save its root token and recovery key now, in a password manager: they are shown once and kept nowhere. They are needed to restore OpenBao or to administer it by hand.")}
+      </div>
+      {rows.map(([label, value], i) => (
+        <motion.div key={label} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 + i * 0.08 }}>
+          <Field label={label}>
+            {value ? (
+              <div className="flex gap-2">
+                <input className="input mono" readOnly value={value} onFocus={(e) => e.currentTarget.select()} />
+                <motion.button whileTap={{ scale: 0.92 }} type="button" className="btn-ghost" title={t("Copy")} onClick={() => copyText(value, t("{what} is copied", { what: label }))}>
+                  <Copy size={14} />
+                </motion.button>
+              </div>
+            ) : (
+              <div className="flex items-start gap-2 text-sm text-red-300"><AlertTriangle size={15} className="mt-0.5 shrink-0" />
+                {t("OpenBao did not return it. Check the log of OpenBao before going on.")}</div>
+            )}
+          </Field>
+        </motion.div>
+      ))}
+      <motion.button whileTap={{ scale: 0.98 }} type="button" className="btn-ghost w-full"
+        onClick={() => copyText(rows.map(([l, v]) => `${l}: ${v}`).join("\n"), t("Both keys are copied"))}>
+        <Copy size={14} /> {t("Copy both")}
+      </motion.button>
+      <Checkbox checked={saved} onChange={setSaved} label={t("I have saved the root token and the recovery key")} />
+      <motion.button whileTap={{ scale: 0.98 }} className="btn-primary w-full" disabled={!saved} onClick={onDone}>{t("Continue")}</motion.button>
+    </div>
   );
 }
 
@@ -239,7 +318,6 @@ function AccountStep({ code }: { code: string }) {
   const [mode, setMode] = useState<AuthMode>("local");
   const [base, setBase] = useState(window.location.origin);
   const [form, setForm] = useState({ username: "admin", display_name: "", email: "", password: "", repeat: "", key: "" });
-  const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const hint = useQuery({ queryKey: ["setup-keystone", base], queryFn: () => api.setup.keystone(code, base), enabled: mode === "keystone" });
   const mismatch = form.repeat !== "" && form.password !== form.repeat;
@@ -247,7 +325,6 @@ function AccountStep({ code }: { code: string }) {
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     setBusy(true);
-    setError(null);
     try {
       const r = await api.setup.account(code, mode === "local"
         ? { mode, public_base_url: base, username: form.username, display_name: form.display_name, email: form.email, password: form.password }
@@ -258,11 +335,15 @@ function AccountStep({ code }: { code: string }) {
         /* storage is off */
       }
       if (mode === "local") {
+        notify.success(t("The administrator {name} is created", { name: form.username }), t("Harbor is set up: signing in…"));
         await bootstrap();
         window.location.replace("/");
-      } else window.location.assign(r.redirect);
+      } else {
+        notify.success(t("Keystone is connected"), t("Harbor is set up: going to Keystone to sign in…"));
+        window.location.assign(r.redirect);
+      }
     } catch (err) {
-      setError((err as Error).message);
+      notify.error(mode === "local" ? t("The administrator is not created") : t("Keystone is not connected"), (err as Error).message);
       setBusy(false);
     }
   };
@@ -279,52 +360,71 @@ function AccountStep({ code }: { code: string }) {
         <Radio checked={mode === "keystone"} onChange={() => setMode("keystone")} label={t("Keystone (single sign-on)")}
           hint={t("People and roles are managed in Keystone; the panel synchronises them.")} />
       </div>
-      {mode === "local" ? (
-        <div className="grid gap-3 sm:grid-cols-2">
-          <Field label={t("Administrator's user name")}><input className="input mono" autoComplete="username" value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} /></Field>
-          <Field label={t("Name")}><input className="input" value={form.display_name} onChange={(e) => setForm({ ...form, display_name: e.target.value })} /></Field>
-          <div className="sm:col-span-2"><Field label={t("E-mail")} hint={t("optional; Keystone matches people by it when they are moved")}><input className="input" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></Field></div>
-          <Field label={t("Password")} hint={t("at least 10 characters, mixed case or digits")}><PasswordInput autoComplete="new-password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} /></Field>
-          <Field label={t("Repeat")} hint={mismatch ? <span className="text-red-300">{t("the passwords differ")}</span> : undefined}><PasswordInput autoComplete="new-password" value={form.repeat} onChange={(e) => setForm({ ...form, repeat: e.target.value })} /></Field>
-        </div>
-      ) : (
-        <div className="space-y-3 text-sm text-slate-300">
-          <ol className="list-decimal space-y-2 pl-5">
-            <li>{t("In Keystone open Applications → Connect an application, type Harbor, address of the panel:")} <code className="mono break-all text-slate-100">{base}</code>
-              {hint.data && <div className="mt-1 space-y-0.5 text-xs text-slate-500">
-                <div>{t("Redirect address:")} <code className="mono break-all">{hint.data.redirect_uri}</code></div>
-                <div>{t("Address after sign-out:")} <code className="mono break-all">{hint.data.post_logout_uri}</code></div>
-              </div>}
-            </li>
-            <li>{t("Give yourself the role admin: without an administrator in Keystone the panel refuses the connection.")}</li>
-            <li>{t("Paste the connection key Keystone shows once:")}</li>
-          </ol>
-          <textarea className="input mono h-24 text-xs" placeholder="spa1.…" value={form.key} onChange={(e) => setForm({ ...form, key: e.target.value.trim() })} />
-        </div>
-      )}
-      <ErrorBox message={error} />
-      <button className="btn-primary w-full" disabled={busy || (mode === "local" ? !form.username || !form.password || form.password !== form.repeat : !form.key)}>
-        {busy ? <Loader2 size={16} className="animate-spin" /> : <UserPlus size={16} />} {mode === "local" ? t("Create the administrator and sign in") : t("Connect Keystone and sign in")}
-      </button>
+      <motion.div key={mode} initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.18 }}>
+        {mode === "local" ? (
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field label={t("Administrator's user name")}><input className="input mono" autoComplete="username" value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} /></Field>
+            <Field label={t("Name")}><input className="input" value={form.display_name} onChange={(e) => setForm({ ...form, display_name: e.target.value })} /></Field>
+            <div className="sm:col-span-2"><Field label={t("E-mail")} hint={t("optional; Keystone matches people by it when they are moved")}><input className="input" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></Field></div>
+            <Field label={t("Password")} hint={t("at least 10 characters, mixed case or digits")}><PasswordInput autoComplete="new-password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} /></Field>
+            <Field label={t("Repeat")} hint={mismatch ? <span className="text-red-300">{t("the passwords differ")}</span> : undefined}><PasswordInput autoComplete="new-password" value={form.repeat} onChange={(e) => setForm({ ...form, repeat: e.target.value })} /></Field>
+          </div>
+        ) : (
+          <div className="space-y-3 text-sm text-slate-300">
+            <ol className="list-decimal space-y-2 pl-5">
+              <li>{t("In Keystone open Applications → Connect an application, type Harbor, address of the panel:")} <code className="mono break-all text-slate-100">{base}</code>
+                {hint.data && <div className="mt-1 space-y-0.5 text-xs text-slate-500">
+                  <div>{t("Redirect address:")} <code className="mono break-all">{hint.data.redirect_uri}</code></div>
+                  <div>{t("Address after sign-out:")} <code className="mono break-all">{hint.data.post_logout_uri}</code></div>
+                </div>}
+              </li>
+              <li>{t("Give yourself the role admin: without an administrator in Keystone the panel refuses the connection.")}</li>
+              <li>{t("Paste the connection key Keystone shows once:")}</li>
+            </ol>
+            <textarea className="input mono h-24 text-xs" placeholder="spa1.…" value={form.key} onChange={(e) => setForm({ ...form, key: e.target.value.trim() })} />
+          </div>
+        )}
+      </motion.div>
+      <motion.button whileTap={{ scale: 0.98 }} className="btn-primary w-full" disabled={busy || (mode === "local" ? !form.username || !form.password || form.password !== form.repeat : !form.key)}>
+        <BusyIcon busy={busy} icon={<UserPlus size={16} />} /> {mode === "local" ? t("Create the administrator and sign in") : t("Connect Keystone and sign in")}
+      </motion.button>
     </form>
   );
 }
 
-/** The setup wizard: the setup code, the storage, the sign-in. After it the "First steps" of the overview take over. */
+/** The setup wizard: the setup code, the storage, the keys of OpenBao, the sign-in. After it the "First steps" of the
+ * overview take over. */
 export default function SetupPage() {
   const state = useQuery({ queryKey: ["setup"], queryFn: () => api.setup.state(), refetchInterval: (q) => (q.state.data?.stage === "storage" ? false : 5000) });
   const [code, setCode] = useState<string | null>(null);
+  // Kept here, not in the storage step: the stage of the server moves on as soon as the storage is saved, and the keys
+  // must stay on the screen until the user confirms they are saved.
+  const [secrets, setSecrets] = useState<BaoSecrets | null>(null);
+  // The answer of the storage step says the stage moved on; a reading of the stage right after it may still come from a
+  // process that has not started on the new storage yet, and must not bring the storage step back.
+  const [storageSaved, setStorageSaved] = useState(false);
   const stage = state.data?.stage;
 
   if (stage === "done") return <Navigate to="/" replace />;
-  if (!state.data) return <Shell><div className="flex items-center gap-2 py-6 text-sm text-slate-400"><Loader2 size={16} className="animate-spin" /> {t("Loading…")}</div></Shell>;
-  const step = !code ? 0 : stage === "storage" ? 1 : 2;
+  if (!state.data) return (
+    <MotionConfig reducedMotion="user">
+      <Shell><div className="flex items-center gap-2 py-6 text-sm text-slate-400"><Loader2 size={16} className="animate-spin" /> {t("Loading…")}</div></Shell>
+    </MotionConfig>
+  );
+  const step = !code ? 0 : stage === "storage" && !storageSaved ? 1 : secrets ? 2 : 3;
   return (
-    <Shell wide={step > 0}>
-      <Steps current={step} />
-      {step === 0 && <CodeStep onDone={(c) => { setCode(c); state.refetch(); }} />}
-      {step === 1 && <StorageStep code={code!} onDone={() => state.refetch()} />}
-      {step === 2 && <AccountStep code={code!} />}
-    </Shell>
+    <MotionConfig reducedMotion="user">
+      <Shell wide={step > 0}>
+        <Steps current={step} compact={step === 0} />
+        {/* Each step slides in when it comes. No exit animation: AnimatePresence mode="wait" around a step with its own
+            animated parts kept the previous step on the screen for good. */}
+        <motion.div key={step} initial={{ opacity: 0, x: 32 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.25, ease: "easeOut" }}>
+          {step === 0 && <CodeStep onDone={(c) => { setCode(c); state.refetch(); }} />}
+          {step === 1 && <StorageStep code={code!} onDone={(s) => { setSecrets(s); setStorageSaved(true); state.refetch(); }} />}
+          {step === 2 && <SecretsStep secrets={secrets!} onDone={() => setSecrets(null)} />}
+          {step === 3 && <AccountStep code={code!} />}
+        </motion.div>
+      </Shell>
+    </MotionConfig>
   );
 }
