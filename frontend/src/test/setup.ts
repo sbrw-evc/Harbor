@@ -13,6 +13,11 @@ Object.defineProperty(window, "matchMedia", {
 
 Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText: vi.fn(() => Promise.resolve()) } });
 
+// Downloads: the Blob handed to the browser is kept for the test to read; the click of the link does nothing in jsdom.
+URL.createObjectURL = vi.fn(() => "blob:test");
+URL.revokeObjectURL = vi.fn();
+HTMLAnchorElement.prototype.click = vi.fn();
+
 afterEach(() => {
   cleanup();
   sessionStorage.clear();

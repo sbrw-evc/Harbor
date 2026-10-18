@@ -1,11 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
-import { AlertTriangle, Check, CheckCircle2, Copy, Database, KeyRound, Loader2, ShieldCheck, UserPlus } from "lucide-react";
+import { AlertTriangle, Check, CheckCircle2, Copy, Database, Download, KeyRound, Loader2, ShieldCheck, UserPlus } from "lucide-react";
 import { AnimatePresence, MotionConfig, motion } from "framer-motion";
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { Navigate } from "react-router-dom";
 import clsx from "clsx";
 import { api } from "@/lib/api";
-import { copyText, useFocus } from "@/lib/hooks";
+import { copyText, saveTextFile, useFocus } from "@/lib/hooks";
 import { notify } from "@/lib/notify";
 import type { AuthMode, StorageCheck, StorageInput } from "@/lib/types";
 import { useAuth } from "@/store/auth";
@@ -288,6 +288,13 @@ function SecretsStep({ secrets, onDone }: { secrets: BaoSecrets; onDone: () => v
   }, []);
 
   const rows = [[t("Root token"), secrets.root_token], [t("Recovery key"), secrets.recovery_key]] as const;
+  const saveFile = () => {
+    const lines = [t("OpenBao of Harbor at {address}, initialised {date}", { address: window.location.origin, date: new Date().toLocaleString() }),
+      "", ...rows.map(([l, v]) => `${l}: ${v}`), "",
+      t("Keep this file in a safe place (a password manager) and delete it from the downloads.")];
+    saveTextFile(`harbor-openbao-keys-${new Date().toISOString().slice(0, 10)}.txt`, lines.join("\n") + "\n");
+    notify.success(t("The keys are saved to a file"), t("Keep it in a safe place and delete it from the downloads."));
+  };
   return (
     <div className="space-y-4">
       <div className="flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-200">
@@ -311,10 +318,15 @@ function SecretsStep({ secrets, onDone }: { secrets: BaoSecrets; onDone: () => v
           </Field>
         </motion.div>
       ))}
-      <motion.button whileTap={{ scale: 0.98 }} type="button" className="btn-ghost w-full"
-        onClick={() => copyText(rows.map(([l, v]) => `${l}: ${v}`).join("\n"), t("Both keys are copied"))}>
-        <Copy size={14} /> {t("Copy both")}
-      </motion.button>
+      <div className="grid gap-2 sm:grid-cols-2">
+        <motion.button whileTap={{ scale: 0.98 }} type="button" className="btn-ghost w-full"
+          onClick={() => copyText(rows.map(([l, v]) => `${l}: ${v}`).join("\n"), t("Both keys are copied"))}>
+          <Copy size={14} /> {t("Copy both")}
+        </motion.button>
+        <motion.button whileTap={{ scale: 0.98 }} type="button" className="btn-ghost w-full" onClick={saveFile}>
+          <Download size={14} /> {t("Save to a file")}
+        </motion.button>
+      </div>
       <Checkbox checked={saved} onChange={setSaved} label={t("I have saved the root token and the recovery key")} />
       <motion.button whileTap={{ scale: 0.98 }} className="btn-primary w-full" disabled={!saved} onClick={onDone}>{t("Continue")}</motion.button>
     </div>

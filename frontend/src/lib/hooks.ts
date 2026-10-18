@@ -38,3 +38,12 @@ export function useFocus<T extends HTMLElement>(when: unknown = true) {
   }, [when]);
   return ref;
 }
+
+/** Hands the user a text file to save (the browser's download). */
+export function saveTextFile(name: string, text: string, type = "text/plain;charset=utf-8") {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([text], { type }));
+  a.download = name;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}

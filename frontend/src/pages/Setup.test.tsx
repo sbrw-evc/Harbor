@@ -166,6 +166,16 @@ describe("the keys of OpenBao", () => {
     await waitFor(() => expect(navigator.clipboard.writeText).toHaveBeenCalledWith("s.root"));
     fireEvent.click(screen.getByRole("button", { name: /Copy both/ }));
     await waitFor(() => expect(navigator.clipboard.writeText).toHaveBeenCalledWith("Root token: s.root\nRecovery key: recovery=="));
+    fireEvent.click(screen.getByRole("button", { name: /Save to a file/ }));
+    const calls = vi.mocked(URL.createObjectURL).mock.calls;
+    const file = calls[calls.length - 1][0] as Blob;
+    const text = await new Promise<string>((done) => {
+      const reader = new FileReader();
+      reader.onload = () => done(String(reader.result));
+      reader.readAsText(file);
+    });
+    expect(text).toContain("Root token: s.root\nRecovery key: recovery==");
+    expect(notify.success).toHaveBeenCalledWith("The keys are saved to a file", expect.any(String));
 
     const next = screen.getByRole("button", { name: "Continue" }) as HTMLButtonElement;
     expect(next.disabled).toBe(true);
