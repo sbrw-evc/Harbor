@@ -37,4 +37,4 @@ jobs:
         with:
           node-version: "20"
       - working-directory: frontend
-        run: npm install --no-audit --no-fund && npm run build
+        run: npm install --no-audit --no-fund && npm test && npm run build

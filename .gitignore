@@ -11,3 +11,6 @@ __pycache__/
 
 .pytest_cache/
 *.tsbuildinfo
+frontend/coverage/
+backend/coverage.xml
+.coverage
