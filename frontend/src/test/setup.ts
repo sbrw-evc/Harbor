@@ -18,6 +18,9 @@ URL.createObjectURL = vi.fn(() => "blob:test");
 URL.revokeObjectURL = vi.fn();
 HTMLAnchorElement.prototype.click = vi.fn();
 
+// The Web Animations API (auto-animate, the theme switch): an animation that is over at once.
+Element.prototype.animate = vi.fn(() => ({ finished: Promise.resolve(), cancel() {}, addEventListener() {}, onfinish: null })) as never;
+
 afterEach(() => {
   cleanup();
   sessionStorage.clear();

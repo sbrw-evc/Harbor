@@ -186,6 +186,34 @@ def stack(tmp_path, monkeypatch):
     PLATFORMS.pop("fake", None)
 
 
+# API_FIXTURES=<file>: the answers of the GET requests are written there for the tests of the frontend
+# (frontend/src/test/api-fixtures.json), keyed by the path with its ids replaced; keys and tokens are masked.
+RECORD: dict = {}
+_ID = re.compile(r"^([0-9a-f]{8}-[0-9a-f-]{27}|\d+|([0-9a-f]{2}:){5}[0-9a-f]{2})$")
+_NAMED = ("backups", "share", "guides")
+_KEY = re.compile(r"[A-Za-z0-9+/]{42,43}=")
+_TOKEN = re.compile(r'"(token|secret)": "[^"]{16,}"')
+_VPN_KEY = re.compile(r"vpn://[A-Za-z0-9_=-]+")  # the Amnezia key: a packed config with a private key
+
+
+def fixture_path(path: str) -> str:
+    parts = path.split("?")[0].split("/")
+    out = []
+    for i, p in enumerate(parts):
+        if _ID.match(p):
+            out.append(":id")
+        elif i > 0 and parts[i - 1] in _NAMED and p:
+            out.append(":name")
+        else:
+            out.append(p)
+    return "/".join(out)
+
+
+def masked(value):
+    text = _VPN_KEY.sub("vpn://masked", _KEY.sub("A" * 43 + "=", json.dumps(value, ensure_ascii=False)))
+    return json.loads(_TOKEN.sub(r'"\1": "masked"', text))
+
+
 class Api:
     """The panel through HTTP, signed in as the administrator; every answer is checked for success unless expected."""
 
@@ -196,7 +224,12 @@ class Api:
         r = await self.h.request(method, path, headers={**HEADERS, **kw.pop("headers", {})}, **kw)
         assert r.status_code == expect, f"{method} {path}: {r.status_code} {r.text[:400]}"
         ctype = r.headers.get("content-type", "")
-        return r.json() if ctype.startswith("application/json") else r.text
+        data = r.json() if ctype.startswith("application/json") else r.text
+        if method == "GET" and expect == 200:
+            key = fixture_path(path)
+            if len(json.dumps(data)) >= len(json.dumps(RECORD.get(key, ""))):
+                RECORD[key] = masked(data)
+        return data
 
     def get(self, path, **kw):
         return self.call("GET", path, **kw)
@@ -232,6 +265,10 @@ def test_the_panel_through_its_api(stack):
             await c.users.create(Actor("setup", "admin"), "admin", "Admin", Role.ADMIN, PASSWORD, must_change=False)
             async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://nc.test") as h:
                 await walk(Api(h), c, h)
+            if os.environ.get("API_FIXTURES"):
+                with open(os.environ["API_FIXTURES"], "w", encoding="utf-8") as f:
+                    json.dump(dict(sorted(RECORD.items())), f, ensure_ascii=False, indent=1)
+                    f.write("\n")
         finally:
             await c._lose_leadership()
             await c.stop()
@@ -381,9 +418,15 @@ async def walk(api: Api, c, h: httpx.AsyncClient):
     await api.delete(f"/api/tokens/{(tokens[0] if isinstance(tokens, list) else tokens['items'][0])['id']}")
     assert (await api.get("/api/spa")) is not None
     backup = await api.post("/api/backups")
+    await api.get("/api/backups")
     name = backup.get("name") or (await api.get("/api/backups"))[0]["name"]
     assert await api.get(f"/api/backups/{name}")
     await api.delete(f"/api/backups/{name}")
+
+    # --- what the pages of the frontend read, while there is something to show ---
+    for path in ("/api/setup", f"/api/clients/{anna['id']}", "/api/clients", "/api/settings", "/api/infra",
+                 "/api/auth/me", "/api/server/info", "/api/routing/status", "/api/analytics/summary"):
+        await api.get(path)
 
     # --- the end of the clients and the session ---
     await api.delete(f"/api/clients/{tv['id']}")
