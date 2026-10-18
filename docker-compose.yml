@@ -7,7 +7,7 @@ name: network-control
 services:
   awg-client:
     build: ./awg-client
-    image: onedev.evcsbrw.ru/monitoring/harbor/awg-client:${NC_VERSION:-2.0.4}
+    image: onedev.evcsbrw.ru/monitoring/harbor/awg-client:${NC_VERSION:-2.0.5}
     container_name: nc-awg-client
     network_mode: host
     cap_add: [NET_ADMIN]
@@ -82,7 +82,7 @@ services:
 
   flow-collector:
     build: ./flow-collector
-    image: onedev.evcsbrw.ru/monitoring/harbor/flow-collector:${NC_VERSION:-2.0.4}
+    image: onedev.evcsbrw.ru/monitoring/harbor/flow-collector:${NC_VERSION:-2.0.5}
     container_name: nc-flow-collector
     ports: ["${FLOW_PORT:-2055}:2055/udp", "${SFLOW_PORT:-6343}:6343/udp"]
     volumes:
@@ -97,7 +97,7 @@ services:
 
   backend:
     build: ./backend
-    image: onedev.evcsbrw.ru/monitoring/harbor/backend:${NC_VERSION:-2.0.4}
+    image: onedev.evcsbrw.ru/monitoring/harbor/backend:${NC_VERSION:-2.0.5}
     container_name: nc-backend
     volumes:
       # bootstrap.json, the AppRole of OpenBao, the setup code, known_hosts, backups, the GeoIP and OUI databases.
@@ -118,7 +118,7 @@ services:
 
   frontend:
     build: ./frontend
-    image: onedev.evcsbrw.ru/monitoring/harbor/frontend:${NC_VERSION:-2.0.4}
+    image: onedev.evcsbrw.ru/monitoring/harbor/frontend:${NC_VERSION:-2.0.5}
     container_name: nc-frontend
     ports: ["${PANEL_PORT:-8080}:8080"]
     volumes: ["./data/tiles:/var/cache/nginx/tiles"]
