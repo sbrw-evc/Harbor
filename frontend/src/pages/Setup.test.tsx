@@ -194,7 +194,7 @@ describe("the sign-in step", () => {
   it("applies everything with its button, creates the administrator and signs in", async () => {
     await toAccount();
     type(input("Address of the panel"), "https://nc.example.com/");
-    type(input("Name"), "Root");
+    type(input("Display name"), "Root");
     type(input("E-mail"), "root@example.com");
     type(input("Password"), "Correct-Horse-9");
     type(input("Repeat"), "Correct-Horse-8");
@@ -304,14 +304,14 @@ describe("going back", () => {
     setup.state.mockResolvedValue(ACCOUNT);
     await save();
     await screen.findByText("How people sign in");
-    type(input("Name"), "Root");
+    type(input("Display name"), "Root");
     // The storage is only a draft on the server: the sign-in step goes back to it.
     fireEvent.click(screen.getByRole("button", { name: /^Back$/ }));
     await waitFor(() => expect(input("Password", 0).value).toBe("pg-pass"));
     type(input("Host"), "db2");
     await save();
     expect(setup.storage.mock.calls[1][1].postgres).toMatchObject({ host: "db2", password: "pg-pass" });
-    await waitFor(() => expect(input("Name").value).toBe("Root"));
+    await waitFor(() => expect(input("Display name").value).toBe("Root"));
     fireEvent.click(screen.getByRole("button", { name: /Go to the step Storage/ }));
     expect(input("Host").value).toBe("db2");
   });

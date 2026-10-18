@@ -91,7 +91,7 @@ export default function Profile() {
         <Card title={<span className="flex items-center gap-2"><UserCircle size={14} /> {t("Account")}</span>}>
           <dl>
             <Row label={t("Username")}><span className="mono">{user?.username}</span></Row>
-            <Row label={t("Name")}>{user?.display_name || "—"}</Row>
+            <Row label={t("Display name")}>{user?.display_name || "—"}</Row>
             <Row label={t("E-mail")}>{user?.email || "—"}</Row>
             <Row label={t("Role")}>{t(ROLE_LABEL[user?.role ?? "viewer"])}</Row>
             <Row label={t("Groups")}>{user?.groups.length ? user.groups.join(", ") : "—"}</Row>

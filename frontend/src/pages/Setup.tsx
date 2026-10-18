@@ -425,7 +425,7 @@ function AccountStep({ code, onBack, onApplying, onApplied }: {
         {mode === "local" ? (
           <div className="grid gap-3 sm:grid-cols-2">
             <Field label={t("Administrator's user name")}><input className="input mono" autoComplete="username" value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} /></Field>
-            <Field label={t("Name")}><input className="input" value={form.display_name} onChange={(e) => setForm({ ...form, display_name: e.target.value })} /></Field>
+            <Field label={t("Display name")} hint={t("How the panel shows the person, e.g. John Smith; may stay empty")}><input className="input" value={form.display_name} onChange={(e) => setForm({ ...form, display_name: e.target.value })} /></Field>
             <div className="sm:col-span-2"><Field label={t("E-mail")} hint={t("optional; Keystone matches people by it when they are moved")}><input className="input" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></Field></div>
             <Field label={t("Password")} hint={t("at least 10 characters, mixed case or digits")}><PasswordInput autoComplete="new-password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} /></Field>
             <Field label={t("Repeat")} hint={mismatch ? <span className="text-red-300">{t("the passwords differ")}</span> : undefined}><PasswordInput autoComplete="new-password" value={form.repeat} onChange={(e) => setForm({ ...form, repeat: e.target.value })} /></Field>

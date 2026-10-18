@@ -31,7 +31,7 @@ function NewUser({ open, onClose }: { open: boolean; onClose: () => void }) {
         <div className="grid gap-3 sm:grid-cols-2">
           <Field label={t("User name")}><input className="input mono" value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} /></Field>
           <Field label={t("Role")}><Select value={form.role} onChange={(v) => setForm({ ...form, role: v as Role })} options={ROLES.map((r) => ({ value: r, label: t(ROLE_LABEL[r]) }))} /></Field>
-          <Field label={t("Name")}><input className="input" value={form.display_name} onChange={(e) => setForm({ ...form, display_name: e.target.value })} /></Field>
+          <Field label={t("Display name")} hint={t("How the panel shows the person, e.g. John Smith; may stay empty")}><input className="input" value={form.display_name} onChange={(e) => setForm({ ...form, display_name: e.target.value })} /></Field>
           <Field label={t("E-mail")}><input className="input" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></Field>
         </div>
         <Field label={t("Temporary password")} hint={t("at least 10 characters, mixed case or digits; it is changed at the first sign-in")}>

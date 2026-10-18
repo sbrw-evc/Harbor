@@ -71,6 +71,8 @@ export default {
   "Save its root token and recovery key: they are shown once.": "Сохраните root-токен и ключ восстановления: они показываются один раз.",
   "{what} is copied": "{what}: скопировано",
   "Copy both": "Скопировать оба",
+  "Display name": "Отображаемое имя",
+  "How the panel shows the person, e.g. John Smith; may stay empty": "Как показывать человека в панели, например «Иван Петров». Можно оставить пустым",
   "Save to a file": "Сохранить в файл",
   "Go to the step {step}": "Перейти к шагу «{step}»",
   "OpenBao of Harbor at {address}, initialised {date}": "OpenBao панели Harbor {address}, инициализирован {date}",
